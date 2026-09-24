@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.build/
+*.log
+.env
+.env.local
+*.local
+.DS_Store
+Thumbs.db
+# Local dev store output
+.dev-data/

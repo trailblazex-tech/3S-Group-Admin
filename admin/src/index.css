@@ -1,0 +1,48 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 3S Admin. A dark navy rail and a calm paper-toned workspace; each site
+   brings its own accent colour (--site-accent, set from the site registry),
+   reserved for the one action that matters on each screen. Light only:
+   this is a working tool used in offices, and one well-tuned theme beats two
+   half-tuned ones. */
+
+@layer base {
+  :root {
+    color-scheme: light;
+    --admin-navy: 222 47% 16%;
+    --admin-navy-deep: 222 47% 11%;
+    --site-accent: 38 92% 50%;
+
+    --background: 40 24% 97%;
+    --foreground: 222 30% 14%;
+    --card: 0 0% 100%;
+    --muted: 40 16% 93%;
+    --muted-foreground: 222 12% 42%;
+    --border: 40 14% 87%;
+    --input: 40 14% 84%;
+    --ring: var(--site-accent);
+    --destructive: 0 62% 45%;
+    --success: 152 46% 30%;
+    --radius: 0.6rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html,
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+
+  body {
+    font-family: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  }
+
+  :focus-visible {
+    outline: 2px solid hsl(var(--site-accent));
+    outline-offset: 2px;
+  }
+}

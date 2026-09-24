@@ -1,0 +1,27 @@
+{
+  "name": "3s-admin",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "api",
+    "admin"
+  ],
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "test": "npm test --workspace api",
+    "typecheck": "npm run typecheck --workspace admin",
+    "lint": "npm run lint --workspace admin",
+    "build": "npm run build --workspace api && npm run build --workspace admin",
+    "check": "npm test && npm run typecheck && npm run lint && npm run build",
+    "deploy:infra": "node scripts/deploy-infra.mjs",
+    "deploy:api": "node scripts/deploy-api.mjs",
+    "deploy:admin": "node scripts/deploy-admin.mjs",
+    "db:migrate": "node scripts/db-migrate.mjs",
+    "db:import": "node scripts/db-import.mjs",
+    "user:invite": "node scripts/invite-user.mjs",
+    "site:grant": "node scripts/grant-site.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
