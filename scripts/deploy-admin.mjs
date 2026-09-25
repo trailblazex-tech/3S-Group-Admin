@@ -1,16 +1,15 @@
-/**
+﻿/**
  * Builds the admin app against the deployed stack and publishes it.
  *
  *   npm run deploy:admin
  */
-import { execFileSync } from 'node:child_process';
+import { execSync } from 'node:child_process';
 import { aws, stackOutputs } from './lib/aws.mjs';
 
 const outputs = stackOutputs();
 
-execFileSync('npm', ['run', 'build', '--workspace', 'admin'], {
+execSync('npm run build --workspace admin', {
   stdio: 'inherit',
-  shell: process.platform === 'win32',
   env: {
     ...process.env,
     VITE_API_URL: '/api',
