@@ -13,9 +13,22 @@ Parameters:
     Type: String
     Default: http://localhost:5173
     Description: Origin of the local admin dev server, allowed to upload to the media bucket.
+  AdminDomain:
+    Type: String
+    Default: ''
+    Description: Optional - apex domain for the admin (www.<domain> is served too). Leave empty to use the CloudFront URL.
+  AdminCertificateArn:
+    Type: String
+    Default: ''
+    Description: ACM certificate in us-east-1 covering AdminDomain and www.AdminDomain (required with AdminDomain).
+  AdminHostedZoneId:
+    Type: String
+    Default: ''
+    Description: Route 53 hosted zone of AdminDomain (required with AdminDomain).
 
 Conditions:
   HasAlarmEmail: !Not [!Equals [!Ref AlarmEmail, '']]
+  HasAdminDomain: !Not [!Equals [!Ref AdminDomain, '']]
 
 Resources:
   # ---------------------------------------------------------------------------
@@ -137,9 +150,14 @@ Resources:
       CorsConfiguration:
         CorsRules:
           - AllowedMethods: [POST]
-            AllowedOrigins:
-              - !Sub https://${AdminDistribution.DomainName}
-              - !Ref LocalDevOrigin
+            AllowedOrigins: !If
+              - HasAdminDomain
+              - - !Sub https://${AdminDistribution.DomainName}
+                - !Sub https://${AdminDomain}
+                - !Sub https://www.${AdminDomain}
+                - !Ref LocalDevOrigin
+              - - !Sub https://${AdminDistribution.DomainName}
+                - !Ref LocalDevOrigin
             AllowedHeaders: ['*']
             MaxAge: 3000
       Tags:
@@ -321,6 +339,16 @@ Resources:
         IPV6Enabled: true
         PriceClass: PriceClass_200
         DefaultRootObject: index.html
+        Aliases: !If
+          - HasAdminDomain
+          - [!Ref AdminDomain, !Sub 'www.${AdminDomain}']
+          - !Ref AWS::NoValue
+        ViewerCertificate: !If
+          - HasAdminDomain
+          - AcmCertificateArn: !Ref AdminCertificateArn
+            SslSupportMethod: sni-only
+            MinimumProtocolVersion: TLSv1.2_2021
+          - CloudFrontDefaultCertificate: true
         Origins:
           - Id: app
             DomainName: !GetAtt AdminSiteBucket.RegionalDomainName
@@ -354,6 +382,34 @@ Resources:
       Tags:
         - Key: Project
           Value: 3s-admin
+
+  AdminDnsRecords:
+    Type: AWS::Route53::RecordSetGroup
+    Condition: HasAdminDomain
+    Properties:
+      HostedZoneId: !Ref AdminHostedZoneId
+      RecordSets:
+        # Z2FDTNDATAQYW2 is CloudFront's fixed alias hosted zone.
+        - Name: !Ref AdminDomain
+          Type: A
+          AliasTarget:
+            DNSName: !GetAtt AdminDistribution.DomainName
+            HostedZoneId: Z2FDTNDATAQYW2
+        - Name: !Ref AdminDomain
+          Type: AAAA
+          AliasTarget:
+            DNSName: !GetAtt AdminDistribution.DomainName
+            HostedZoneId: Z2FDTNDATAQYW2
+        - Name: !Sub www.${AdminDomain}
+          Type: A
+          AliasTarget:
+            DNSName: !GetAtt AdminDistribution.DomainName
+            HostedZoneId: Z2FDTNDATAQYW2
+        - Name: !Sub www.${AdminDomain}
+          Type: AAAA
+          AliasTarget:
+            DNSName: !GetAtt AdminDistribution.DomainName
+            HostedZoneId: Z2FDTNDATAQYW2
 
   # ---------------------------------------------------------------------------
   # API
@@ -532,10 +588,15 @@ Resources:
 
 Outputs:
   AdminUrl:
+    Value: !If [HasAdminDomain, !Sub 'https://${AdminDomain}', !Sub 'https://${AdminDistribution.DomainName}']
+  AdminCloudFrontUrl:
     Value: !Sub https://${AdminDistribution.DomainName}
   DeliveryUrlPattern:
     Description: What a site's build pulls (replace <site>)
-    Value: !Sub https://${AdminDistribution.DomainName}/api/delivery/<site>
+    Value: !If
+      - HasAdminDomain
+      - !Sub https://${AdminDomain}/api/delivery/<site>
+      - !Sub https://${AdminDistribution.DomainName}/api/delivery/<site>
   UserPoolId:
     Value: !Ref UserPool
   UserPoolClientId:

@@ -1,11 +1,15 @@
 /**
- * Creates or updates the whole platform stack from infra/template.yaml.
+ * Creates or updates the whole platform stack from infra/template.yaml, with
+ * the values in infra/parameters.json.
  *
  *   npm run deploy:infra [-- --alarm-email you@example.com]
  */
+import { readFileSync } from 'node:fs';
 import { arg, aws, stackName, stackOutputs } from './lib/aws.mjs';
 
+const parameters = JSON.parse(readFileSync('infra/parameters.json', 'utf8'));
 const alarmEmail = arg('alarm-email', '');
+if (typeof alarmEmail === 'string' && alarmEmail) parameters.AlarmEmail = alarmEmail;
 
 aws(
   [
@@ -19,7 +23,7 @@ aws(
     'CAPABILITY_NAMED_IAM',
     '--no-fail-on-empty-changeset',
     '--parameter-overrides',
-    `AlarmEmail=${alarmEmail === true ? '' : alarmEmail}`,
+    ...Object.entries(parameters).map(([key, value]) => `${key}=${value}`),
     '--tags',
     'Project=3s-admin',
   ],

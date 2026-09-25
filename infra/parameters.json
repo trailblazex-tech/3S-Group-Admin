@@ -1,0 +1,5 @@
+{
+  "AdminDomain": "3sgroupadmin.com",
+  "AdminCertificateArn": "arn:aws:acm:us-east-1:092487476995:certificate/2a4d16b6-a20b-4cf2-9136-5f6814932e6e",
+  "AdminHostedZoneId": "Z07938911LVJUO0XHBBXB"
+}
