@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, Loader2, Sparkles } from 'lucide-react';
+import { Check, Loader2 } from 'lucide-react';
 import type { GreetingBanner } from '../lib/api';
 import { useSite } from '../lib/site';
 import { useGreetingLibrary } from '../lib/library';
@@ -55,8 +55,7 @@ export function BannerTile({ banner, selected, onSelect }: { banner: GreetingBan
     >
       {/* Thumbnails keep the grid light; the moving version loads on hover. */}
       <img src={isAnimating || selected ? banner.url : banner.thumb} alt="" loading="lazy" className="h-full w-full object-cover" />
-      <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white backdrop-blur">
-        <Sparkles className="h-3 w-3" />
+      <span className="absolute left-2 top-2 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white backdrop-blur">
         {themeLabels[banner.theme] ?? banner.theme}
       </span>
       {selected && (

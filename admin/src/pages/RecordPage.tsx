@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, CalendarClock, FileText, ImagePlus, Loader2, Save, Sparkles, Upload } from 'lucide-react';
+import { ArrowLeft, CalendarClock, FileText, ImagePlus, Images, Info, Loader2, Save, Upload } from 'lucide-react';
 import type { AdminRecord, CollectionSummary, FieldDefinition, FieldOption, GreetingTemplate, ScheduleFields } from '../lib/api';
 import { useSite } from '../lib/site';
 import { fillOrg, loadGreetingLibrary } from '../lib/library';
@@ -282,7 +282,7 @@ function LibraryImageInput({ field, value, onChange, collectionName }: { field: 
           onClick={() => setIsPicking(true)}
           className="inline-flex h-9 items-center gap-2 rounded-lg bg-navy px-3 text-xs font-bold text-white transition-colors hover:bg-navy-deep"
         >
-          <Sparkles className="h-3.5 w-3.5 text-gold-light" />
+          <Images className="h-3.5 w-3.5" />
           Choose a ready-made banner
         </button>
         <UploadButton kind="image" collectionName={collectionName} onUploaded={onChange} />
@@ -534,7 +534,7 @@ export function RecordPage() {
         <form className="mt-6 space-y-5 rounded-xl border border-border bg-card p-5 sm:p-6" onSubmit={handleSubmit}>
           {templateNote && (
             <p className="flex items-start gap-2 rounded-lg bg-gold/15 px-3 py-2.5 text-sm text-foreground">
-              <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-navy" />
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-navy" />
               {templateNote}
             </p>
           )}
