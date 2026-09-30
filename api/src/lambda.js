@@ -6,7 +6,7 @@
  */
 import { userFromClaims } from './core/access.js';
 import { createRouter } from './core/router.js';
-import { sites } from './sites/index.js';
+import { sites, upcomingSites } from './sites/index.js';
 import { createDsqlStore } from './aws/dsql-store.js';
 import { createPublisher, createWebhookResolver } from './aws/publisher.js';
 import { createS3Uploader } from './aws/s3-uploader.js';
@@ -22,6 +22,8 @@ const router = createRouter({
   sites,
   storeFor: (site) => createDsqlStore(site, { publisher }),
   uploader: createS3Uploader({ bucket: process.env.MEDIA_BUCKET, mediaBaseUrl: process.env.MEDIA_BASE_URL }),
+  mediaBaseUrl: process.env.MEDIA_BASE_URL,
+  upcoming: upcomingSites,
 });
 
 function respond(status, body, headers = {}) {

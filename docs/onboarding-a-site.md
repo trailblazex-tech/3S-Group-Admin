@@ -34,7 +34,9 @@ import minerals from './minerals/site.js';
 const all = [konark, minerals];
 ```
 
-`npm test` validates the declarations.
+`npm test` validates the declarations. If the site was listed in
+`upcomingSites` (the "coming soon" tiles), it drops off that list by itself
+once it is in `all`.
 
 ## 2. Make the site read its content from files
 

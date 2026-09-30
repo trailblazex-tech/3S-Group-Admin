@@ -7,6 +7,7 @@
  *   GET  /delivery/<site>             published content files (no auth; what a
  *                                     site's public build pulls)
  *   POST /sites/<site>/uploads        a one-time direct-upload grant
+ *   GET  /sites/<site>/library        ready-made greeting templates + banners
  *   *    /sites/<site>/...            that site's content (see engine.js)
  *
  * `user` is already authenticated by the caller (API Gateway's JWT
@@ -15,12 +16,13 @@
 import { accessibleSites, canAccessSite } from './access.js';
 import { buildDeliveryFiles } from './delivery.js';
 import { ApiError, createEngine, routeSiteRequest } from './engine.js';
+import { greetingLibrary } from './greeting-library.js';
 import { planUpload } from './uploads.js';
-import { describeSite } from '../sites/index.js';
+import { describeSite, describeUpcoming } from '../sites/index.js';
 
 const json = (status, body, headers = {}) => ({ status, body, headers });
 
-export function createRouter({ sites, storeFor, uploader }) {
+export function createRouter({ sites, storeFor, uploader, mediaBaseUrl = '', upcoming = [] }) {
   function siteOr404(siteId) {
     const site = sites.get(siteId);
     if (!site) throw new ApiError(404, 'That site is not managed here.');
@@ -46,6 +48,9 @@ export function createRouter({ sites, storeFor, uploader }) {
       return json(200, {
         user: { email: user.email, name: user.name, isPlatformAdmin: user.isPlatformAdmin },
         sites: mySites,
+        // Group websites not on the platform yet - only platform admins see
+        // them, as "coming soon" on the website picker.
+        upcoming: user.isPlatformAdmin ? upcoming.filter((entry) => !sites.has(entry.id)).map(describeUpcoming) : [],
       });
     }
 
@@ -55,6 +60,10 @@ export function createRouter({ sites, storeFor, uploader }) {
 
       const sitePath = `/${rest.join('/')}`;
       const actor = { id: user.id, email: user.email, name: user.name };
+
+      if (sitePath === '/library' && method === 'GET') {
+        return json(200, greetingLibrary(mediaBaseUrl), { 'Cache-Control': 'private, max-age=300' });
+      }
 
       if (sitePath === '/uploads' && method === 'POST') {
         const plan = planUpload({ siteId: site.id, collections: site.collections, ...body });

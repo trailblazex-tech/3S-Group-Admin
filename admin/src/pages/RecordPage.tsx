@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, FileText, Loader2, Save, Upload } from 'lucide-react';
-import type { AdminRecord, FieldDefinition, FieldOption } from '../lib/api';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { ArrowLeft, CalendarClock, FileText, ImagePlus, Loader2, Save, Sparkles, Upload } from 'lucide-react';
+import type { AdminRecord, CollectionSummary, FieldDefinition, FieldOption, GreetingTemplate, ScheduleFields } from '../lib/api';
 import { useSite } from '../lib/site';
+import { fillOrg, loadGreetingLibrary } from '../lib/library';
+import { addDays, describeWindow, istNow, scheduleStatus, suggestDates } from '../lib/schedule';
+import { BannerPicker } from '../components/BannerPicker';
+import { ScheduleBadge } from '../components/ScheduleBadge';
 
 type Values = Record<string, unknown>;
 
@@ -44,12 +48,18 @@ function UploadButton({ kind, collectionName, onUploaded }: { kind: 'image' | 'f
   const { api } = useSite();
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState('');
-  const accept = kind === 'image' ? 'image/jpeg,image/png,image/webp' : 'application/pdf';
+  const accept = kind === 'image' ? 'image/jpeg,image/png,image/webp,image/gif' : 'application/pdf';
 
   const handleChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
+    if (file.type === 'image/gif' && file.size > 3 * 1024 * 1024) {
+      const ok = window.confirm(
+        `This GIF is ${(file.size / 1024 / 1024).toFixed(1)} MB. Large GIFs make the website slow to open on phones - under 3 MB is best. Upload it anyway?`,
+      );
+      if (!ok) return;
+    }
 
     setIsUploading(true);
     setError('');
@@ -74,7 +84,7 @@ function UploadButton({ kind, collectionName, onUploaded }: { kind: 'image' | 'f
         <input type="file" accept={accept} onChange={handleChange} disabled={isUploading} className="sr-only" />
       </label>
       <p className="text-[11px] text-muted-foreground">
-        {kind === 'image' ? 'JPG, PNG or WEBP, up to 10 MB.' : 'PDF, up to 20 MB.'}
+        {kind === 'image' ? 'JPG, PNG, WEBP or GIF, up to 10 MB.' : 'PDF, up to 20 MB.'}
       </p>
       {error && <p className="text-xs font-semibold text-destructive">{error}</p>}
     </div>
@@ -190,6 +200,23 @@ function FieldInput({
     return <input id={field.name} type="date" value={String(value ?? '')} onChange={(event) => onChange(event.target.value)} className={inputClass} />;
   }
 
+  if (field.type === 'time') {
+    return (
+      <div className="flex gap-2">
+        <input id={field.name} type="time" value={String(value ?? '')} onChange={(event) => onChange(event.target.value)} className={inputClass} />
+        {Boolean(value) && (
+          <button type="button" onClick={() => onChange('')} className="shrink-0 rounded-lg border border-border px-3 text-xs font-semibold text-muted-foreground hover:bg-muted">
+            Clear
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (field.type === 'image' && field.library) {
+    return <LibraryImageInput field={field} value={String(value ?? '')} onChange={onChange} collectionName={collectionName} />;
+  }
+
   if (field.type === 'image') {
     const current = String(value ?? '');
     return (
@@ -232,12 +259,165 @@ function FieldInput({
   );
 }
 
+/** A banner field: ready-made animated banners first, uploading second. */
+function LibraryImageInput({ field, value, onChange, collectionName }: { field: FieldDefinition; value: string; onChange: (value: unknown) => void; collectionName: string }) {
+  const { media } = useSite();
+  const [isPicking, setIsPicking] = useState(false);
+
+  return (
+    <div className="space-y-3">
+      <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-border bg-muted">
+        {value ? (
+          <img src={media(value)} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <button type="button" onClick={() => setIsPicking(true)} className="flex h-full w-full flex-col items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+            <ImagePlus className="h-7 w-7" />
+            No banner - the greeting shows as text only
+          </button>
+        )}
+      </div>
+      <div className="flex flex-wrap items-start gap-2">
+        <button
+          type="button"
+          onClick={() => setIsPicking(true)}
+          className="inline-flex h-9 items-center gap-2 rounded-lg bg-navy px-3 text-xs font-bold text-white transition-colors hover:bg-navy-deep"
+        >
+          <Sparkles className="h-3.5 w-3.5 text-gold-light" />
+          Choose a ready-made banner
+        </button>
+        <UploadButton kind="image" collectionName={collectionName} onUploaded={onChange} />
+        {value && (
+          <button type="button" onClick={() => onChange('')} className="h-9 text-xs font-semibold text-muted-foreground underline hover:text-destructive">
+            Remove banner
+          </button>
+        )}
+      </div>
+      <details className="text-xs text-muted-foreground">
+        <summary className="cursor-pointer">Or paste an image or GIF link</summary>
+        <input id={field.name} type="text" value={value} onChange={(event) => onChange(event.target.value)} placeholder="https://..." className={`${inputClass} mt-2`} />
+      </details>
+      {isPicking && (
+        <BannerPicker
+          current={value}
+          onClose={() => setIsPicking(false)}
+          onPick={(url) => {
+            onChange(url);
+            setIsPicking(false);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+const rangePresets: { label: string; days: number }[] = [
+  { label: 'Just that day', days: 1 },
+  { label: '3 days', days: 3 },
+  { label: '1 week', days: 7 },
+  { label: '1 month', days: 30 },
+];
+
+/** Start and end together, with a sentence saying exactly when visitors see it. */
+function ScheduleEditor({
+  collection,
+  schedule,
+  values,
+  setValue,
+  dynamicOptions,
+}: {
+  collection: CollectionSummary;
+  schedule: ScheduleFields;
+  values: Values;
+  setValue: (name: string, value: unknown) => void;
+  dynamicOptions: Record<string, FieldOption[]>;
+}) {
+  const field = (name: string | undefined) => collection.fields.find((entry) => entry.name === name);
+  const cells = [schedule.start, schedule.startTime, schedule.end, schedule.endTime].map(field).filter(Boolean) as FieldDefinition[];
+  const summary = describeWindow(values, schedule);
+  const status = scheduleStatus(values, schedule);
+  const start = typeof values[schedule.start] === 'string' ? (values[schedule.start] as string) : '';
+
+  return (
+    <fieldset className="rounded-xl border border-border bg-muted/30 p-4 sm:p-5">
+      <legend className="flex items-center gap-2 px-1 text-sm font-semibold text-foreground">
+        <CalendarClock className="h-4 w-4" />
+        When it shows on the website
+      </legend>
+
+      <div className="mt-1 flex flex-wrap items-center gap-1.5">
+        <span className="mr-1 text-xs text-muted-foreground">Quick:</span>
+        {rangePresets.map((preset) => (
+          <button
+            key={preset.label}
+            type="button"
+            onClick={() => {
+              const from = start || istNow().date;
+              if (!start) setValue(schedule.start, from);
+              setValue(schedule.end, addDays(from, preset.days - 1));
+              if (schedule.endTime) setValue(schedule.endTime, '');
+            }}
+            className="rounded-full border border-border bg-card px-3 py-1 text-xs font-semibold text-foreground hover:border-accent"
+          >
+            {preset.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        {cells.map((cell) => (
+          <div key={cell.name}>
+            <label className="mb-1.5 block text-sm font-semibold text-foreground" htmlFor={cell.name}>
+              {cell.label}
+              {cell.required && <span className="text-destructive"> *</span>}
+            </label>
+            <FieldInput field={cell} value={values[cell.name]} onChange={(next) => setValue(cell.name, next)} dynamicOptions={dynamicOptions} collectionName={collection.name} />
+            {cell.help && <p className="mt-1.5 text-xs text-muted-foreground">{cell.help}</p>}
+          </div>
+        ))}
+      </div>
+
+      {summary && (
+        <div className="mt-4 flex flex-wrap items-center gap-2 rounded-lg bg-card px-3 py-2.5 text-sm text-foreground ring-1 ring-inset ring-border">
+          <ScheduleBadge status={status} compact />
+          <span>{summary}</span>
+        </div>
+      )}
+    </fieldset>
+  );
+}
+
+/** A template's values for a new record, with this website's name filled in. */
+function valuesFromTemplate(template: GreetingTemplate, fields: FieldDefinition[], org: string, bannerUrl: string) {
+  const has = (name: string) => fields.some((field) => field.name === name);
+  const today = istNow().date;
+  const dates = template.on ? suggestDates(template.on, template.around, today) : null;
+  const year = (dates?.endDate ?? today).slice(0, 4);
+  const values: Values = {
+    eventName: `${template.label} ${year}`,
+    title: template.title,
+    message: fillOrg(template.message, org),
+    bannerImage: bannerUrl,
+    bannerAlt: template.alt,
+    startDate: dates?.startDate ?? '',
+    endDate: dates?.endDate ?? '',
+    frequency: 'visit',
+  };
+  if (template.cta) {
+    values.ctaLabel = template.cta.label;
+    values.ctaHref = template.cta.href;
+  }
+  return Object.fromEntries(Object.entries(values).filter(([name]) => has(name)));
+}
+
 export function RecordPage() {
   const { name = '', id = '' } = useParams();
   const navigate = useNavigate();
-  const { api, collections, refreshCollections, path } = useSite();
+  const { api, site, collections, refreshCollections, path } = useSite();
   const collection = collections.find((entry) => entry.name === name);
   const isNew = id === 'new';
+  const [searchParams] = useSearchParams();
+  const templateId = isNew ? searchParams.get('template') : null;
+  const [templateNote, setTemplateNote] = useState('');
 
   const fields = useMemo(() => (collection?.fields ?? []).filter((field) => !field.adminOnly), [collection]);
   const [values, setValues] = useState<Values>(() => emptyValues(fields));
@@ -254,8 +434,31 @@ export function RecordPage() {
 
     if (isNew) {
       setValues(emptyValues(fields));
-      setIsLoading(false);
-      return;
+      if (!templateId || !collection.templates) {
+        setIsLoading(false);
+        return;
+      }
+      // Starting from a festival or school occasion: fill in what we can.
+      let alive = true;
+      setIsLoading(true);
+      loadGreetingLibrary(api)
+        .then((library) => {
+          const template = library.templates.find((entry) => entry.id === templateId);
+          if (!alive || !template) return;
+          const banner = library.banners.find((entry) => entry.theme === template.theme)?.url ?? '';
+          setValues((current) => ({ ...current, ...valuesFromTemplate(template, fields, site.name, banner) }));
+          setIsDirty(true);
+          setTemplateNote(
+            template.on
+              ? `Filled in from "${template.label}". Check the wording and dates, then save.`
+              : `Filled in from "${template.label}". Its date changes every year - set "Show from" and "Show until" before saving.`,
+          );
+        })
+        .catch(() => alive && setTemplateNote('Could not load the ready-made greeting - fill the form in by hand.'))
+        .finally(() => alive && setIsLoading(false));
+      return () => {
+        alive = false;
+      };
     }
 
     setIsLoading(true);
@@ -264,7 +467,7 @@ export function RecordPage() {
       .then((record: AdminRecord) => setValues(Object.fromEntries(fields.map((field) => [field.name, toFormValue(field, record[field.name])]))))
       .catch((problem) => setError(problem instanceof Error ? problem.message : 'Could not load that record.'))
       .finally(() => setIsLoading(false));
-  }, [api, collection, fields, id, isNew]);
+  }, [api, collection, fields, id, isNew, templateId, site.name]);
 
   useEffect(() => {
     if (!collection) return;
@@ -316,7 +519,7 @@ export function RecordPage() {
         {collection.label}
       </Link>
 
-      <h1 className="mt-3 break-words text-2xl font-bold text-foreground">{title}</h1>
+      <h1 className="mt-3 break-words font-display text-3xl font-semibold text-foreground">{title}</h1>
 
       {isLoading ? (
         <div className="mt-6 space-y-5 rounded-xl border border-border bg-card p-6">
@@ -329,7 +532,31 @@ export function RecordPage() {
         </div>
       ) : (
         <form className="mt-6 space-y-5 rounded-xl border border-border bg-card p-5 sm:p-6" onSubmit={handleSubmit}>
-          {fields.map((field) => (
+          {templateNote && (
+            <p className="flex items-start gap-2 rounded-lg bg-gold/15 px-3 py-2.5 text-sm text-foreground">
+              <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-navy" />
+              {templateNote}
+            </p>
+          )}
+          {fields.map((field) => {
+            const schedule = collection.schedule;
+            if (schedule && field.name === schedule.start) {
+              return (
+                <ScheduleEditor
+                  key="schedule"
+                  collection={collection}
+                  schedule={schedule}
+                  values={values}
+                  dynamicOptions={dynamicOptions}
+                  setValue={(fieldName, next) => {
+                    setIsDirty(true);
+                    setValues((current) => ({ ...current, [fieldName]: next }));
+                  }}
+                />
+              );
+            }
+            if (schedule && [schedule.end, schedule.startTime, schedule.endTime].includes(field.name)) return null;
+            return (
             <div key={field.name}>
               {field.type !== 'boolean' && (
                 <label className="mb-1.5 block text-sm font-semibold text-foreground" htmlFor={field.name}>
@@ -349,7 +576,8 @@ export function RecordPage() {
               />
               {field.help && <p className="mt-1.5 text-xs text-muted-foreground">{field.help}</p>}
             </div>
-          ))}
+            );
+          })}
 
           {error && (
             <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm font-semibold text-destructive">

@@ -79,7 +79,7 @@ Options per collection are documented in `api/src/core/schema.js`.
 
 Uploads never pass through Lambda (whose request limit is 6 MB). The admin
 asks for a grant (`POST /sites/<site>/uploads`), the Lambda validates the
-section, type (JPG/PNG/WEBP up to 10 MB, PDF up to 20 MB) and size, and
+section, type (JPG/PNG/WEBP/GIF up to 10 MB, PDF up to 20 MB) and size, and
 returns a 5-minute presigned POST for one exact key
 `<site>/<section>/<name>-<random>.<ext>`. The browser uploads straight to the
 private bucket; files are served by CloudFront with year-long caching (keys
@@ -88,6 +88,15 @@ are unique, so they never go stale).
 Existing site images keep their relative paths (`/images/...`) and are
 served by the site itself; the admin previews them against the site's
 `publicUrl`.
+
+**Greeting banner library.** Event greetings can start from a ready-made
+template (festival or school occasion: headline, message, suggested dates -
+`api/src/core/greeting-library.js`) and use a ready-made animated banner.
+The banners are public-domain (CC0) photos found through Openverse plus a few
+drawn illustrations, turned into short looping animated WEBPs (with a still
+twin for visitors who prefer reduced motion) by
+`scripts/greeting-library/build.py`, and served from the media bucket under
+`library/greetings/`. `sources.json` records where every photo came from.
 
 ## Publishing
 

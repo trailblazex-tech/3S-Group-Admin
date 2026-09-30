@@ -5,7 +5,9 @@ authenticator app), pick a website, and edit its content - photos, people,
 documents, announcements - without a developer. "Publish" rebuilds that
 website with what was saved.
 
-**Websites on the platform:** The Konark Academy (`konark`).
+**Websites on the platform:** The Konark Academy (`konark`). Coming next:
+3S Minerals, 3S Global Greens, 3S Security - platform admins already see
+them on the website picker (`upcomingSites` in `api/src/sites/index.js`).
 
 ## How it fits together
 
@@ -53,6 +55,9 @@ npm run check            # tests, typecheck, lint, build
 npm run deploy:api       # ship backend changes
 npm run deploy:admin     # ship admin app changes
 npm run deploy:infra     # apply infra/template.yaml changes
+
+npm run library:build    # rebuild the ready-made greeting banners (Python + Pillow)
+npm run library:upload   # upload them to the media bucket
 
 npm run user:invite -- --email a@b.com --name "A B" --sites konark
 npm run site:grant  -- --email a@b.com --site other-site [--revoke]

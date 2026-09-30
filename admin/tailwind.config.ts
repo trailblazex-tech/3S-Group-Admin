@@ -7,7 +7,8 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
+        sans: ['Inter Variable', 'Inter', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
+        display: ['Fraunces Variable', 'Georgia', 'serif'],
       },
       colors: {
         border: token('border'),
@@ -21,6 +22,8 @@ export default {
         success: token('success'),
         navy: { DEFAULT: token('admin-navy'), deep: token('admin-navy-deep') },
         accent: token('site-accent'),
+        gold: { DEFAULT: token('brand-gold'), light: token('brand-gold-light') },
+        brand: { blue: token('brand-blue') },
       },
       borderRadius: {
         lg: 'var(--radius)',

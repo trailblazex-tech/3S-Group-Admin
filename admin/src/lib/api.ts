@@ -15,6 +15,7 @@ export interface Site {
   id: string;
   name: string;
   shortName: string;
+  tagline: string;
   publicUrl: string;
   accent: string;
 }
@@ -26,7 +27,7 @@ export interface FieldOption {
 
 export interface FieldDefinition {
   name: string;
-  type: 'text' | 'textarea' | 'number' | 'date' | 'image' | 'file' | 'select' | 'tags' | 'boolean';
+  type: 'text' | 'textarea' | 'number' | 'date' | 'time' | 'image' | 'file' | 'select' | 'tags' | 'boolean';
   label: string;
   required?: boolean;
   help?: string;
@@ -38,6 +39,16 @@ export interface FieldDefinition {
   allowCustom?: boolean;
   adminOnly?: boolean;
   default?: unknown;
+  /** Image fields: offer the ready-made banner library. */
+  library?: 'greetings';
+}
+
+/** Names the date/time fields that decide when a record is on the website. */
+export interface ScheduleFields {
+  start: string;
+  end: string;
+  startTime?: string;
+  endTime?: string;
 }
 
 export interface CollectionSummary {
@@ -53,6 +64,9 @@ export interface CollectionSummary {
   group: string | null;
   /** The row set is prescribed: rows are edited, never added or removed. */
   fixed: boolean;
+  schedule: ScheduleFields | null;
+  /** New records can start from a ready-made greeting. */
+  templates: 'greetings' | null;
   fields: FieldDefinition[];
   total: number;
   published: number;
@@ -68,6 +82,36 @@ export interface ActivityEntry {
   collection: string | null;
   recordId: string | null;
   title: string | null;
+}
+
+export interface GreetingTemplate {
+  id: string;
+  group: string;
+  label: string;
+  theme: string;
+  /** Fixed calendar day as [month, day]; absent when the date moves each year. */
+  on?: [number, number];
+  moving?: boolean;
+  /** Days to show before and after the day. */
+  around: [number, number];
+  title: string;
+  message: string;
+  alt: string;
+  cta?: { label: string; href: string };
+}
+
+export interface GreetingBanner {
+  id: string;
+  theme: string;
+  url: string;
+  still: string;
+  thumb: string;
+  credit: { title: string; creator: string | null; license: string; url: string } | null;
+}
+
+export interface GreetingLibrary {
+  templates: GreetingTemplate[];
+  banners: GreetingBanner[];
 }
 
 export class ApiError extends Error {
@@ -108,7 +152,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 export function me() {
-  return request<{ user: Me; sites: Site[] }>('/me');
+  return request<{ user: Me; sites: Site[]; upcoming?: Site[] }>('/me');
 }
 
 export function siteApi(siteId: string) {
@@ -141,6 +185,8 @@ export function siteApi(siteId: string) {
       request<{ activity: ActivityEntry[] }>(`${base}/activity?limit=${limit}`).then((r) => r.activity),
 
     publish: () => request<{ queued: boolean; message: string }>(`${base}/publish`, { method: 'POST' }),
+
+    library: () => request<GreetingLibrary>(`${base}/library`),
 
     /** Asks for a one-time grant, then uploads the file straight to storage. */
     async upload(collection: string, file: File) {

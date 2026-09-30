@@ -4,6 +4,7 @@ export default {
   id: 'konark',
   name: 'The Konark Academy',
   shortName: 'KA',
+  tagline: 'CBSE school, Ladwa',
   /**
    * The site Publish deploys to: relative media paths like /images/... are
    * previewed from here, and "View live website" opens it. Currently the

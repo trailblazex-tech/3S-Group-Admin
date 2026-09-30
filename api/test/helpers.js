@@ -78,10 +78,13 @@ export const testCollections = {
     file: 'events',
     key: 'events',
     titleField: 'title',
+    schedule: { start: 'startDate', startTime: 'startTime', end: 'endDate', endTime: 'endTime' },
     fields: [
       { name: 'title', type: 'text', label: 'Title', required: true },
       { name: 'startDate', type: 'date', label: 'Show from', required: true },
+      { name: 'startTime', type: 'time', label: 'Start time' },
       { name: 'endDate', type: 'date', label: 'Show until', required: true },
+      { name: 'endTime', type: 'time', label: 'End time' },
       { name: 'video', type: 'text', label: 'Video', parseAs: 'youtubeId' },
       ...recordFields,
     ],

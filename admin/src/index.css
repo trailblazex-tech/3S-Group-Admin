@@ -1,19 +1,26 @@
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/fraunces';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* 3S Admin. A dark navy rail and a calm paper-toned workspace; each site
-   brings its own accent colour (--site-accent, set from the site registry),
-   reserved for the one action that matters on each screen. Light only:
-   this is a working tool used in offices, and one well-tuned theme beats two
-   half-tuned ones. */
+/* 3S Admin. Colours come from the 3S Group mark: its deep indigo-navy and
+   burnished gold. A dark navy rail and a calm paper-toned workspace; each
+   site brings its own accent colour (--site-accent, set from the site
+   registry), reserved for the one action that matters on each screen. Light
+   only: this is a working tool used in offices, and one well-tuned theme
+   beats two half-tuned ones. */
 
 @layer base {
   :root {
     color-scheme: light;
-    --admin-navy: 222 47% 16%;
-    --admin-navy-deep: 222 47% 11%;
-    --site-accent: 38 92% 50%;
+    --admin-navy: 233 32% 19%;
+    --admin-navy-deep: 234 36% 12%;
+    --brand-blue: 223 40% 48%;
+    --brand-gold: 42 48% 58%;
+    --brand-gold-light: 49 62% 74%;
+    --site-accent: var(--brand-gold);
 
     --background: 40 24% 97%;
     --foreground: 222 30% 14%;
@@ -38,11 +45,37 @@
   }
 
   body {
-    font-family: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+    font-family: 'Inter Variable', Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
   }
 
   :focus-visible {
     outline: 2px solid hsl(var(--site-accent));
     outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* The gold of the 3S mark: a soft vertical sheen, not a flat yellow. */
+  .text-brand-gold {
+    background: linear-gradient(180deg, hsl(var(--brand-gold-light)), hsl(var(--brand-gold)));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .bg-brand-night {
+    background:
+      radial-gradient(60rem 30rem at 110% -10%, hsl(var(--brand-blue) / 0.55), transparent 60%),
+      radial-gradient(40rem 26rem at -20% 120%, hsl(var(--brand-gold) / 0.16), transparent 60%),
+      linear-gradient(180deg, hsl(var(--admin-navy)), hsl(var(--admin-navy-deep)));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
   }
 }

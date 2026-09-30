@@ -3,6 +3,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { BrowserRouter, Link, Navigate, Route, Routes, useParams } from 'react-router-dom';
 import { ArrowUpRight, Loader2, LogOut } from 'lucide-react';
 import { ApiError, me, sessionExpired, siteApi, type CollectionSummary, type Me, type Site } from './lib/api';
+import { BrandLockup, BrandMark } from './components/Brand';
 import { auth } from './lib/auth';
 import { SiteContext, mediaUrl, type SiteContextValue } from './lib/site';
 import { AdminLayout } from './components/AdminLayout';
@@ -22,7 +23,10 @@ function FullPage({ children }: { children: ReactNode }) {
 function Spinner({ label }: { label: string }) {
   return (
     <FullPage>
-      <Loader2 className="h-5 w-5 animate-spin" />
+      <span className="relative flex h-14 w-14 items-center justify-center">
+        <Loader2 className="absolute h-14 w-14 animate-spin text-gold/60" strokeWidth={1.25} />
+        <BrandMark className="h-9 w-9" />
+      </span>
       {label}
     </FullPage>
   );
@@ -41,53 +45,120 @@ function SignOutButton({ onSignOut }: { onSignOut: () => void }) {
   );
 }
 
-function SitePicker({ user, sites, onSignOut }: { user: Me; sites: Site[]; onSignOut: () => void }) {
+function domainOf(url: string) {
+  return url.replace(/^https?:\/\//, '').replace(/\/$/, '');
+}
+
+function SiteTile({ site, upcoming = false }: { site: Site; upcoming?: boolean }) {
+  const style = { '--tile-accent': site.accent } as CSSProperties;
+  const body = (
+    <>
+      <span
+        aria-hidden
+        className="absolute inset-x-0 top-0 h-28"
+        style={{ background: `linear-gradient(135deg, hsl(${site.accent} / 0.95), hsl(${site.accent} / 0.5) 55%, transparent)` }}
+      />
+      <span aria-hidden className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10 blur-2xl" />
+      <span className="relative flex items-start justify-between gap-3">
+        <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white font-display text-xl font-bold text-navy-deep shadow-lg ring-4 ring-white/40">
+          {site.shortName}
+        </span>
+        {upcoming ? (
+          <span className="rounded-full bg-white/85 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-navy">Coming soon</span>
+        ) : (
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/85 text-navy transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5">
+            <ArrowUpRight className="h-4 w-4" />
+          </span>
+        )}
+      </span>
+      <span className="relative mt-auto block pt-10">
+        <span className="block font-display text-2xl font-semibold leading-tight text-foreground">{site.name}</span>
+        {site.tagline && <span className="mt-1 block text-sm text-muted-foreground">{site.tagline}</span>}
+        <span className="mt-4 flex items-center justify-between gap-3 border-t border-border pt-3 text-xs">
+          <span className="truncate font-medium text-muted-foreground">{site.publicUrl ? domainOf(site.publicUrl) : 'Website not connected yet'}</span>
+          <span className={`shrink-0 font-bold ${upcoming ? 'text-muted-foreground' : 'text-foreground'}`}>{upcoming ? 'Setup pending' : 'Open admin'}</span>
+        </span>
+      </span>
+    </>
+  );
+
+  const shell = 'group relative flex min-h-[15rem] w-full flex-col overflow-hidden rounded-2xl border border-border bg-card p-6 text-left';
+  if (upcoming) {
+    return (
+      <div style={style} className={`${shell} opacity-80 saturate-[.55]`} aria-label={`${site.name} - coming soon`}>
+        {body}
+      </div>
+    );
+  }
   return (
-    <div className="mx-auto flex min-h-dvh max-w-3xl flex-col px-5 py-12">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-navy text-sm font-extrabold text-accent">3S</span>
-          <div>
-            <p className="text-sm font-bold text-foreground">3S Admin</p>
-            <p className="text-xs text-muted-foreground">{user.email}</p>
+    <Link to={`/s/${site.id}`} style={style} className={`${shell} shadow-sm transition duration-200 hover:-translate-y-1 hover:border-[hsl(var(--tile-accent))] hover:shadow-xl`}>
+      {body}
+    </Link>
+  );
+}
+
+function SitePicker({ user, sites, upcoming, onSignOut }: { user: Me; sites: Site[]; upcoming: Site[]; onSignOut: () => void }) {
+  useEffect(() => {
+    document.title = '3S Group - Website admin';
+    document.documentElement.style.removeProperty('--site-accent');
+  }, []);
+
+  return (
+    <div className="min-h-dvh bg-background">
+      <header className="bg-brand-night">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-5 sm:px-8">
+          <BrandLockup />
+          <div className="flex items-center gap-3">
+            <span className="hidden text-right sm:block">
+              <span className="block text-sm font-semibold text-white">{user.name}</span>
+              <span className="block text-xs text-white/55">{user.email}</span>
+            </span>
+            <button
+              type="button"
+              onClick={onSignOut}
+              className="inline-flex items-center gap-2 rounded-lg border border-white/15 px-3 py-2 text-sm font-semibold text-white/85 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:inline">Sign out</span>
+            </button>
           </div>
         </div>
-        <SignOutButton onSignOut={onSignOut} />
-      </div>
+        <div className="mx-auto max-w-6xl px-5 pb-20 pt-8 sm:px-8 sm:pt-12">
+          <p className="text-xs font-bold uppercase tracking-[0.22em] text-gold-light/80">Namaste, {user.name.split(' ')[0]}</p>
+          <h1 className="mt-2 font-display text-3xl font-semibold text-white sm:text-5xl">
+            Which website are you <span className="text-brand-gold">working on?</span>
+          </h1>
+          <p className="mt-3 max-w-xl text-sm leading-6 text-white/65">
+            Every 3S Group website in one place. Pick one to edit its content - you can switch any time from the top of the menu.
+          </p>
+        </div>
+      </header>
 
-      <h1 className="mt-12 text-2xl font-bold text-foreground">Choose a website</h1>
-      <p className="mt-1 text-sm text-muted-foreground">You can switch any time from the sidebar.</p>
-
-      <ul className="mt-6 grid gap-3 sm:grid-cols-2">
-        {sites.map((site) => (
-          <li key={site.id}>
-            <Link
-              to={`/s/${site.id}`}
-              style={{ '--site-accent': site.accent } as CSSProperties}
-              className="group flex items-center gap-4 rounded-xl border border-border bg-card p-4 transition-colors hover:border-accent"
-            >
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-accent text-sm font-extrabold text-navy-deep">
-                {site.shortName}
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate font-semibold text-foreground">{site.name}</span>
-                <span className="block truncate text-xs text-muted-foreground">{site.publicUrl.replace(/^https?:\/\//, '')}</span>
-              </span>
-              <ArrowUpRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
-            </Link>
-          </li>
-        ))}
-      </ul>
+      <main className="mx-auto -mt-12 max-w-6xl px-5 pb-16 sm:px-8">
+        <ul className="grid gap-5 sm:grid-cols-2">
+          {sites.map((site) => (
+            <li key={site.id} className="flex">
+              <SiteTile site={site} />
+            </li>
+          ))}
+          {upcoming.map((site) => (
+            <li key={site.id} className="flex">
+              <SiteTile site={site} upcoming />
+            </li>
+          ))}
+        </ul>
+      </main>
     </div>
   );
 }
 
-function Home({ user, sites, onSignOut }: { user: Me; sites: Site[]; onSignOut: () => void }) {
-  if (sites.length === 1) return <Navigate to={`/s/${sites[0].id}`} replace />;
-  return <SitePicker user={user} sites={sites} onSignOut={onSignOut} />;
+function Home({ user, sites, upcoming, onSignOut }: { user: Me; sites: Site[]; upcoming: Site[]; onSignOut: () => void }) {
+  // Someone who edits a single website goes straight to it.
+  if (sites.length === 1 && upcoming.length === 0) return <Navigate to={`/s/${sites[0].id}`} replace />;
+  return <SitePicker user={user} sites={sites} upcoming={upcoming} onSignOut={onSignOut} />;
 }
 
-function SiteWorkspace({ user, sites, onSignOut }: { user: Me; sites: Site[]; onSignOut: () => void }) {
+function SiteWorkspace({ user, sites, upcoming, onSignOut }: { user: Me; sites: Site[]; upcoming: Site[]; onSignOut: () => void }) {
   const { siteId = '' } = useParams();
   const site = sites.find((entry) => entry.id === siteId);
   const [collections, setCollections] = useState<CollectionSummary[] | null>(null);
@@ -143,7 +214,7 @@ function SiteWorkspace({ user, sites, onSignOut }: { user: Me; sites: Site[]; on
 
   return (
     <SiteContext.Provider value={context}>
-      <AdminLayout user={user} sites={sites} onSignOut={onSignOut}>
+      <AdminLayout user={user} sites={sites} upcoming={upcoming} onSignOut={onSignOut}>
         <Routes>
           <Route index element={<DashboardPage />} />
           <Route path="c/:name" element={<CollectionPage />} />
@@ -160,7 +231,7 @@ type Session =
   | { state: 'checking' }
   | { state: 'signedOut' }
   | { state: 'error'; message: string }
-  | { state: 'ready'; user: Me; sites: Site[] };
+  | { state: 'ready'; user: Me; sites: Site[]; upcoming: Site[] };
 
 export default function App() {
   const [session, setSession] = useState<Session>({ state: 'checking' });
@@ -173,7 +244,7 @@ export default function App() {
     setSession({ state: 'checking' });
     try {
       const result = await me();
-      setSession({ state: 'ready', user: result.user, sites: result.sites });
+      setSession({ state: 'ready', user: result.user, sites: result.sites, upcoming: result.upcoming ?? [] });
     } catch (problem) {
       if (problem instanceof ApiError && problem.status === 401) setSession({ state: 'signedOut' });
       else setSession({ state: 'error', message: problem instanceof Error ? problem.message : 'Could not load the admin.' });
@@ -221,8 +292,8 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Home user={session.user} sites={session.sites} onSignOut={signOut} />} />
-        <Route path="/s/:siteId/*" element={<SiteWorkspace user={session.user} sites={session.sites} onSignOut={signOut} />} />
+        <Route path="/" element={<Home user={session.user} sites={session.sites} upcoming={session.upcoming} onSignOut={signOut} />} />
+        <Route path="/s/:siteId/*" element={<SiteWorkspace user={session.user} sites={session.sites} upcoming={session.upcoming} onSignOut={signOut} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

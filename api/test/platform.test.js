@@ -4,7 +4,9 @@ import { canAccessSite, parseGroups, userFromClaims } from '../src/core/access.j
 import { buildDeliveryFiles } from '../src/core/delivery.js';
 import { createRouter } from '../src/core/router.js';
 import { planUpload } from '../src/core/uploads.js';
-import { sites } from '../src/sites/index.js';
+import { greetingLibrary, greetingTemplates } from '../src/core/greeting-library.js';
+import { assertValidCollections } from '../src/core/schema.js';
+import { sites, upcomingSites } from '../src/sites/index.js';
 import { memoryStore, testCollections } from './helpers.js';
 
 const claims = (groups) => ({ sub: 's1', token_use: 'id', email: 'a@b.com', 'cognito:groups': groups });
@@ -52,6 +54,27 @@ test('upload plans pin site, section, type and size', () => {
   assert.throws(() => planUpload({ siteId: 's', collections: testCollections, collection: 'nope', contentType: 'image/jpeg', size: 1 }), { status: 400 });
   assert.throws(() => planUpload({ siteId: 's', collections: testCollections, collection: 'gallery', contentType: 'text/html', size: 1 }), { status: 400 });
   assert.throws(() => planUpload({ siteId: 's', collections: testCollections, collection: 'gallery', contentType: 'image/png', size: 50e6 }), { status: 413 });
+  const gif = planUpload({ siteId: 's', collections: testCollections, collection: 'gallery', filename: 'diwali.gif', contentType: 'image/gif', size: 1000 });
+  assert.match(gif.key, /\.gif$/);
+});
+
+test('the greeting library offers only templates that have banners', () => {
+  const library = greetingLibrary('https://media.example/');
+  assert.ok(library.banners.length > 40);
+  assert.ok(library.banners.every((banner) => banner.url.startsWith('https://media.example/library/greetings/')));
+  const themes = new Set(library.banners.map((banner) => banner.theme));
+  for (const template of library.templates) assert.ok(themes.has(template.theme), template.id);
+  assert.equal(library.templates.length, greetingTemplates.length, 'every template has at least one banner');
+  for (const template of greetingTemplates) {
+    assert.ok(template.moving || template.on, `${template.id} needs a date or moving: true`);
+    assert.ok(template.message.length <= 500, `${template.id} message fits the field`);
+    assert.ok(template.title.length <= 120, `${template.id} title fits the field`);
+  }
+});
+
+test('schedule declarations are checked', () => {
+  const bad = { x: { ...testCollections.events, schedule: { start: 'startDate', end: 'title' } } };
+  assert.throws(() => assertValidCollections('t', bad), /schedule.end "title" must be a date field/);
 });
 
 test('the router keeps sites apart', async () => {
@@ -65,6 +88,7 @@ test('the router keeps sites apart', async () => {
 
   const me = await router.routeRequest({ method: 'GET', path: '/me', user: oneEditor });
   assert.deepEqual(me.body.sites.map((site) => site.id), ['one']);
+  assert.deepEqual(me.body.upcoming, [], 'only platform admins see upcoming websites');
 
   const write = await router.routeRequest({ method: 'POST', path: '/sites/one/gallery', body: { title: 'T', category: 'C' }, user: oneEditor });
   assert.equal(write.status, 201);
@@ -85,4 +109,27 @@ test('the router keeps sites apart', async () => {
 test('every registered site declares valid collections', () => {
   assert.ok(sites.size >= 1);
   for (const site of sites.values()) assert.ok(site.publicUrl.startsWith('https://'), `${site.id} publicUrl`);
+});
+
+test('platform admins see the group websites that are not onboarded yet', async () => {
+  const testSites = new Map([['one', { id: 'one', name: 'One', collections: testCollections }]]);
+  const upcoming = [
+    { id: 'one', name: 'One', shortName: 'O', accent: '0 0% 0%' },
+    { id: 'later', name: 'Later', shortName: 'L', accent: '0 0% 0%' },
+  ];
+  const router = createRouter({ sites: testSites, storeFor: () => memoryStore(), uploader: {}, upcoming, mediaBaseUrl: 'https://m.example' });
+  const admin = userFromClaims(claims('[platform-admins]'));
+
+  const me = await router.routeRequest({ method: 'GET', path: '/me', user: admin });
+  assert.deepEqual(me.body.upcoming.map((site) => site.id), ['later'], 'an onboarded site is never also upcoming');
+
+  const library = await router.routeRequest({ method: 'GET', path: '/sites/one/library', user: admin });
+  assert.equal(library.status, 200);
+  assert.ok(library.body.banners[0].url.startsWith('https://m.example/library/greetings/'));
+});
+
+test('upcoming websites have what the picker shows', () => {
+  for (const site of upcomingSites) {
+    assert.ok(site.id && site.name && site.shortName && site.accent, site.id);
+  }
 });

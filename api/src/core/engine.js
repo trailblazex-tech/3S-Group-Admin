@@ -79,6 +79,13 @@ function validateField(field, raw, categories) {
       return value || null;
     }
 
+    case 'time': {
+      const value = cleanString(raw, 10);
+      if (field.required && !value) throw new ApiError(400, `${label} is required.`);
+      if (value && !/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) throw new ApiError(400, `${label} must be a time like 09:30.`);
+      return value || null;
+    }
+
     case 'image':
     case 'file': {
       const value = cleanString(raw, 500);
@@ -141,9 +148,16 @@ function validateRecord(collection, body, { existing, categories }) {
 }
 
 function validateDateRange(collection, record) {
-  if (record.startDate && record.endDate && record.endDate < record.startDate) {
-    const end = collection.fields.find((field) => field.name === 'endDate')?.label ?? 'End date';
-    throw new ApiError(400, `${end} cannot be before the start date.`);
+  const { start = 'startDate', end = 'endDate', startTime, endTime } = collection.schedule ?? {};
+  if (!record[start] || !record[end]) return;
+
+  // Times are optional: a missing start time means the start of the day, a
+  // missing end time the end of it. "HH:MM" strings compare correctly as text.
+  const from = `${record[start]}T${(startTime && record[startTime]) || '00:00'}`;
+  const until = `${record[end]}T${(endTime && record[endTime]) || '23:59'}`;
+  if (until < from) {
+    const label = collection.fields.find((field) => field.name === end)?.label ?? 'End date';
+    throw new ApiError(400, `${label} cannot be before the start.`);
   }
 }
 

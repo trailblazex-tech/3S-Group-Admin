@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ChevronDown, ChevronUp, Eye, EyeOff, ImageOff, Plus, Search, Trash2 } from 'lucide-react';
 import type { AdminRecord, FieldOption } from '../lib/api';
 import { useSite } from '../lib/site';
+import { scheduleStatus } from '../lib/schedule';
+import { ScheduleBadge } from '../components/ScheduleBadge';
+import { TemplatePicker } from '../components/TemplatePicker';
 
 const pageSize = 40;
 
@@ -24,6 +27,8 @@ export function CollectionPage() {
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState('');
   const [visibleCount, setVisibleCount] = useState(pageSize);
+  const [isChoosingTemplate, setIsChoosingTemplate] = useState(false);
+  const navigate = useNavigate();
 
   const load = useCallback(async () => {
     if (!collection) return;
@@ -117,19 +122,36 @@ export function CollectionPage() {
     <div className="mx-auto max-w-5xl">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold text-foreground">{collection.label}</h1>
+          <h1 className="font-display text-3xl font-semibold text-foreground">{collection.label}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {collection.description} {isLoading ? '' : `${records.length} ${records.length === 1 ? 'record' : 'records'}.`}
           </p>
         </div>
-        {!collection.fixed && (
-          <Link
-            to={path(`/c/${collection.name}/new`)}
-            className="inline-flex h-10 items-center gap-2 rounded-lg bg-navy px-4 text-sm font-bold text-white transition-colors hover:bg-navy-deep"
-          >
-            <Plus className="h-4 w-4" />
-            Add
-          </Link>
+        {!collection.fixed &&
+          (collection.templates ? (
+            <button
+              type="button"
+              onClick={() => setIsChoosingTemplate(true)}
+              className="inline-flex h-10 items-center gap-2 rounded-lg bg-navy px-4 text-sm font-bold text-white transition-colors hover:bg-navy-deep"
+            >
+              <Plus className="h-4 w-4" />
+              Add
+            </button>
+          ) : (
+            <Link
+              to={path(`/c/${collection.name}/new`)}
+              className="inline-flex h-10 items-center gap-2 rounded-lg bg-navy px-4 text-sm font-bold text-white transition-colors hover:bg-navy-deep"
+            >
+              <Plus className="h-4 w-4" />
+              Add
+            </Link>
+          ))}
+        {isChoosingTemplate && (
+          <TemplatePicker
+            onClose={() => setIsChoosingTemplate(false)}
+            onBlank={() => navigate(path(`/c/${collection.name}/new`))}
+            onPick={(template) => navigate(`${path(`/c/${collection.name}/new`)}?template=${encodeURIComponent(template.id)}`)}
+          />
         )}
       </div>
 
@@ -242,10 +264,22 @@ export function CollectionPage() {
                   {subtitle && <p className="truncate text-xs text-muted-foreground">{subtitle}</p>}
                 </Link>
 
-                {!collection.fixed && record.isActive === false && (
-                  <span className="hidden rounded bg-muted px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground sm:inline">
-                    Hidden
-                  </span>
+                {collection.schedule ? (
+                  <>
+                    <span className="sm:hidden">
+                      <ScheduleBadge status={scheduleStatus(record, collection.schedule)} compact />
+                    </span>
+                    <span className="hidden sm:inline">
+                      <ScheduleBadge status={scheduleStatus(record, collection.schedule)} />
+                    </span>
+                  </>
+                ) : (
+                  !collection.fixed &&
+                  record.isActive === false && (
+                    <span className="hidden rounded bg-muted px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground sm:inline">
+                      Hidden
+                    </span>
+                  )
                 )}
 
                 {!collection.fixed && (

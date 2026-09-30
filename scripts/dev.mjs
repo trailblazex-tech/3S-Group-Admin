@@ -13,7 +13,7 @@ import { spawn } from 'node:child_process';
 import { CognitoJwtVerifier } from 'aws-jwt-verify';
 import { userFromClaims } from '../api/src/core/access.js';
 import { createRouter } from '../api/src/core/router.js';
-import { sites } from '../api/src/sites/index.js';
+import { sites, upcomingSites } from '../api/src/sites/index.js';
 import { createFileStore } from '../api/src/local/file-store.js';
 import { createLocalUploader } from '../api/src/local/local-uploader.js';
 
@@ -46,6 +46,10 @@ const router = createRouter({
   storeFor: (site) =>
     createFileStore(site, { contentDir: path.join(siteDir(site), 'content'), dataDir: path.resolve('.dev-data') }),
   uploader,
+  // Ready-made greeting banners are always served from the production media
+  // domain; set MEDIA_BASE_URL (a stack output) to preview them locally.
+  mediaBaseUrl: process.env.MEDIA_BASE_URL ?? '',
+  upcoming: upcomingSites,
 });
 
 function send(response, status, body) {

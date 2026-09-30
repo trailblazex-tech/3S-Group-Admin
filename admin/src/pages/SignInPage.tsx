@@ -3,6 +3,9 @@ import type { FormEvent, ReactNode } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { ArrowLeft, KeyRound, Loader2, LockKeyhole, ShieldCheck, Smartphone } from 'lucide-react';
 import { auth, authErrorMessage, type SignInStep } from '../lib/auth';
+import { BrandLockup, BrandMark } from '../components/Brand';
+
+const groupWebsites = ['The Konark Academy', '3S Minerals', '3S Global Greens', '3S Security'];
 
 type Screen =
   | { kind: 'credentials'; notice?: string }
@@ -127,8 +130,8 @@ export function SignInPage({ onSignedIn }: { onSignedIn: () => void }) {
   );
 
   let icon = <LockKeyhole className="h-5 w-5" />;
-  let title = 'Sign in';
-  let intro = 'Use the account your administrator created for you.';
+  let title = 'Welcome back';
+  let intro = 'Sign in with the account your administrator created for you.';
   let body: ReactNode;
 
   switch (screen.kind) {
@@ -259,42 +262,52 @@ export function SignInPage({ onSignedIn }: { onSignedIn: () => void }) {
   }
 
   return (
-    <div className="grid min-h-dvh lg:grid-cols-[1.05fr_1fr]">
-      <aside className="relative hidden overflow-hidden bg-navy p-10 lg:flex lg:flex-col lg:justify-between">
-        <div aria-hidden className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-accent/20 blur-3xl" />
-        <div className="relative flex items-center gap-3">
-          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent text-base font-extrabold text-navy-deep">
-            3S
-          </span>
-          <div>
-            <p className="text-lg font-bold text-white">3S Admin</p>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/50">Content platform</p>
-          </div>
+    <div className="grid min-h-dvh lg:grid-cols-[1.1fr_1fr]">
+      <aside className="bg-brand-night relative hidden overflow-hidden p-10 lg:flex lg:flex-col lg:justify-between xl:p-14">
+        {/* The 3S mark, large and quiet, behind the copy */}
+        <BrandMark className="pointer-events-none absolute -bottom-24 -right-24 h-[30rem] w-[30rem] opacity-[0.07]" />
+        <div aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.06)_1px,transparent_0)] [background-size:22px_22px]" />
+
+        <div className="relative">
+          <BrandLockup size="lg" />
         </div>
 
-        <div className="relative max-w-sm">
-          <h1 className="text-3xl font-bold leading-tight text-white">Every website, one place.</h1>
-          <p className="mt-4 text-sm leading-7 text-white/70">
-            Update photos, people, documents and announcements across the 3S Group websites - no developer needed.
+        <div className="relative max-w-md">
+          <p className="text-xs font-bold uppercase tracking-[0.22em] text-gold-light/80">One sign-in</p>
+          <h1 className="mt-3 font-display text-4xl font-semibold leading-[1.1] text-white xl:text-5xl">
+            Every 3S Group website, <span className="text-brand-gold">in one place.</span>
+          </h1>
+          <p className="mt-5 text-sm leading-7 text-white/70">
+            Update photos, people, documents, fees and festival greetings - and publish them live in seconds. No developer needed.
           </p>
+          <ul className="mt-8 flex flex-wrap gap-2">
+            {groupWebsites.map((name) => (
+              <li key={name} className="rounded-full border border-white/15 bg-white/[0.06] px-3 py-1 text-xs font-semibold text-white/80">
+                {name}
+              </li>
+            ))}
+          </ul>
         </div>
 
-        <p className="relative flex items-center gap-2 text-xs text-white/50">
-          <ShieldCheck className="h-4 w-4" />
+        <p className="relative flex items-center gap-2 text-xs text-white/55">
+          <ShieldCheck className="h-4 w-4 text-gold" />
           Protected with two-step verification.
         </p>
       </aside>
 
-      <main className="flex items-center justify-center px-5 py-12">
-        <div className="w-full max-w-sm">
-          <div className="mb-10 flex items-center gap-2.5 lg:hidden">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-navy text-xs font-extrabold text-accent">3S</span>
-            <span className="text-sm font-bold text-foreground">3S Admin</span>
+      <main className="relative flex items-center justify-center px-5 py-12">
+        <div aria-hidden className="bg-brand-night absolute inset-x-0 top-0 h-40 lg:hidden" />
+        <div className="relative w-full max-w-sm">
+          <div className="mb-8 flex justify-center lg:hidden">
+            <BrandLockup />
           </div>
-          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-muted text-foreground">{icon}</span>
-          <h2 className="mt-5 text-2xl font-bold text-foreground">{title}</h2>
-          <p className="mt-1 text-sm leading-6 text-muted-foreground">{intro}</p>
-          <div className="mt-7">{body}</div>
+          <div className="rounded-2xl border border-border bg-card p-6 shadow-xl shadow-navy/5 sm:p-8 lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
+            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gold/15 text-navy">{icon}</span>
+            <h2 className="mt-5 font-display text-3xl font-semibold text-foreground">{title}</h2>
+            <p className="mt-1.5 text-sm leading-6 text-muted-foreground">{intro}</p>
+            <div className="mt-7">{body}</div>
+          </div>
+          <p className="mt-8 text-center text-xs text-muted-foreground">3S Group &middot; Website admin</p>
         </div>
       </main>
     </div>

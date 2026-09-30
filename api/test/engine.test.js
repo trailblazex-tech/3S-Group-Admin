@@ -46,10 +46,25 @@ test('dates must be real and in order', async () => {
   await assert.rejects(engine.create('events', { title: 'E', startDate: '2026-02-01x', endDate: '2026-03-01' }), { status: 400 });
   await assert.rejects(engine.create('events', { title: 'E', startDate: '2026-11-10', endDate: '2026-11-01' }), {
     status: 400,
-    message: 'Show until cannot be before the start date.',
+    message: 'Show until cannot be before the start.',
   });
   const ok = await engine.create('events', { title: 'E', startDate: '2026-11-01', endDate: '2026-11-10' }, alice);
   assert.equal(ok.endDate, '2026-11-10');
+});
+
+test('times are optional, must be real, and keep a one-day window in order', async () => {
+  const { engine } = setup();
+  await assert.rejects(engine.create('events', { title: 'E', startDate: '2026-11-01', startTime: '25:00', endDate: '2026-11-01' }), {
+    status: 400,
+    message: 'Start time must be a time like 09:30.',
+  });
+  await assert.rejects(
+    engine.create('events', { title: 'E', startDate: '2026-11-01', startTime: '18:00', endDate: '2026-11-01', endTime: '09:00' }),
+    { status: 400, message: 'Show until cannot be before the start.' },
+  );
+  const evening = await engine.create('events', { title: 'E', startDate: '2026-11-01', startTime: '18:00', endDate: '2026-11-01' }, alice);
+  assert.equal(evening.startTime, '18:00');
+  assert.equal(evening.endTime, null);
 });
 
 test('youtube links are reduced to the video id', async () => {
