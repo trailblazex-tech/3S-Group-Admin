@@ -26,6 +26,7 @@ import {
 import type { Me, Site } from '../lib/api';
 import { useSite } from '../lib/site';
 import { BrandMark } from './Brand';
+import { siteLogo } from '../lib/siteLogos';
 
 /** Icons for common section names; anything else gets a document icon. */
 const collectionIcons: Record<string, typeof Users> = {
@@ -64,12 +65,9 @@ function SiteSwitcher({ sites, upcoming, current }: { sites: Site[]; upcoming: S
     };
   }, [open]);
 
-  const badge = (site: Site, size = 'h-9 w-9 text-xs') => (
-    <span
-      className={`flex shrink-0 items-center justify-center rounded-lg font-extrabold text-navy-deep ${size}`}
-      style={{ background: `hsl(${site.accent})` }}
-    >
-      {site.shortName}
+  const badge = (site: Site, size = 'h-9 w-9') => (
+    <span className={`flex shrink-0 items-center justify-center rounded-full bg-white p-0.5 ${size}`}>
+      <img src={siteLogo(site.id)} alt="" className="h-full w-full object-contain" draggable={false} />
     </span>
   );
 
@@ -110,14 +108,14 @@ function SiteSwitcher({ sites, upcoming, current }: { sites: Site[]; upcoming: S
               onClick={() => setOpen(false)}
               className="flex items-center gap-3 rounded-lg px-2 py-2 text-sm hover:bg-muted"
             >
-              {badge(site, 'h-7 w-7 text-[10px]')}
+              {badge(site, 'h-7 w-7')}
               <span className="min-w-0 flex-1 truncate font-medium text-foreground">{site.name}</span>
               {site.id === current.id && <Check className="h-4 w-4 text-foreground" />}
             </Link>
           ))}
           {upcoming.map((site) => (
             <div key={site.id} role="option" aria-selected={false} aria-disabled className="flex cursor-not-allowed items-center gap-3 rounded-lg px-2 py-2 text-sm opacity-55">
-              {badge(site, 'h-7 w-7 text-[10px]')}
+              {badge(site, 'h-7 w-7')}
               <span className="min-w-0 flex-1 truncate font-medium text-foreground">{site.name}</span>
               <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Soon</span>
             </div>

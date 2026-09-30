@@ -4,6 +4,7 @@ import { BrowserRouter, Link, Navigate, Route, Routes, useParams } from 'react-r
 import { ArrowUpRight, Loader2, LogOut } from 'lucide-react';
 import { ApiError, me, sessionExpired, siteApi, type CollectionSummary, type Me, type Site } from './lib/api';
 import { BrandLockup, BrandMark } from './components/Brand';
+import { hasOwnLogo, siteLogo } from './lib/siteLogos';
 import { auth } from './lib/auth';
 import { SiteContext, mediaUrl, type SiteContextValue } from './lib/site';
 import { AdminLayout } from './components/AdminLayout';
@@ -51,20 +52,23 @@ function domainOf(url: string) {
 
 function SiteTile({ site, upcoming = false }: { site: Site; upcoming?: boolean }) {
   const style = { '--tile-accent': site.accent } as CSSProperties;
+  // A site with its own logo gets its own colour; the other group companies
+  // share the 3S mark, so they share its navy, blue and gold too.
+  const band = hasOwnLogo(site.id)
+    ? `linear-gradient(135deg, hsl(${site.accent}), hsl(${site.accent} / 0.55) 60%, hsl(${site.accent} / 0.15))`
+    : 'linear-gradient(120deg, hsl(var(--admin-navy)) 0%, hsl(var(--brand-blue)) 70%, hsl(var(--brand-gold) / 0.85) 130%)';
   const body = (
     <>
-      <span
-        aria-hidden
-        className="absolute inset-x-0 top-0 h-28"
-        style={{ background: `linear-gradient(135deg, hsl(${site.accent} / 0.95), hsl(${site.accent} / 0.5) 55%, transparent)` }}
-      />
-      <span aria-hidden className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10 blur-2xl" />
+      <span aria-hidden className="absolute inset-x-0 top-0 h-28" style={{ background: band }} />
+      <span aria-hidden className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/15 blur-2xl" />
       <span className="relative flex items-start justify-between gap-3">
-        <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white font-display text-xl font-bold text-navy-deep shadow-lg ring-4 ring-white/40">
-          {site.shortName}
+        <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white p-1.5 shadow-lg ring-4 ring-white/40">
+          <img src={siteLogo(site.id)} alt={`${site.name} logo`} className="h-full w-full object-contain" draggable={false} />
         </span>
         {upcoming ? (
-          <span className="rounded-full bg-white/85 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-navy">Coming soon</span>
+          <span className="rounded-full border border-gold-light/50 bg-navy-deep/40 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-gold-light backdrop-blur">
+            Coming soon
+          </span>
         ) : (
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/85 text-navy transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5">
             <ArrowUpRight className="h-4 w-4" />
@@ -85,7 +89,7 @@ function SiteTile({ site, upcoming = false }: { site: Site; upcoming?: boolean }
   const shell = 'group relative flex min-h-[15rem] w-full flex-col overflow-hidden rounded-2xl border border-border bg-card p-6 text-left';
   if (upcoming) {
     return (
-      <div style={style} className={`${shell} opacity-80 saturate-[.55]`} aria-label={`${site.name} - coming soon`}>
+      <div style={style} className={`${shell} shadow-sm`} aria-label={`${site.name} - coming soon`}>
         {body}
       </div>
     );
