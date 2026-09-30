@@ -13,6 +13,7 @@ import {
   LayoutGrid,
   LogOut,
   Megaphone,
+  MessageSquareText,
   Menu,
   Newspaper,
   Phone,
@@ -38,6 +39,7 @@ const collectionIcons: Record<string, typeof Users> = {
   videos: Video,
   'site-settings': Phone,
   'event-greetings': Megaphone,
+  'home-announcement': MessageSquareText,
 };
 
 const groupIcons: Record<string, typeof Users> = {

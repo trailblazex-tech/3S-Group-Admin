@@ -318,6 +318,34 @@ export const collections = {
   },
 
   // -------------------------------------------------------------------------
+  // Homepage announcement - the pill above the headline on the home page.
+  // One row, edited in place.
+  // -------------------------------------------------------------------------
+
+  'home-announcement': {
+    label: 'Homepage Announcement',
+    description: 'The short line shown above the headline on the home page, e.g. "Registration Open for Session 2026-27".',
+    file: 'home',
+    key: 'announcement',
+    titleField: 'text',
+    subtitleField: 'textHindi',
+    imageField: '',
+    fixed: true,
+    fields: [
+      { name: 'text', type: 'text', label: 'Announcement', required: true, maxLength: 120, help: 'Keep it to one short line - it sits above the main headline.' },
+      {
+        name: 'textHindi',
+        type: 'text',
+        label: 'Announcement in Hindi (optional)',
+        maxLength: 120,
+        help: 'Shown when a visitor switches the website to Hindi. Leave empty to show the English line.',
+      },
+      { name: 'isActive', type: 'boolean', label: 'Show on the home page', default: true },
+      { name: 'sortOrder', type: 'number', label: 'Order', min: 1, adminOnly: true },
+    ],
+  },
+
+  // -------------------------------------------------------------------------
   // Site settings - one row, edited in place like the CBSE sections above.
   // -------------------------------------------------------------------------
 

@@ -4,6 +4,10 @@
  * rows again (it never deletes), so it is safe to repeat.
  *
  *   npm run db:import -- --site konark --from ../konark-digital-academy/content [--dry-run]
+ *
+ * --only <collection> imports just that section - the way to seed a section
+ * added after the site joined, without re-importing (and overwriting) the
+ * content editors have changed since.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -13,13 +17,17 @@ import { getSite } from '../api/src/sites/index.js';
 const siteId = arg('site');
 const from = arg('from');
 const dryRun = Boolean(arg('dry-run', false));
+const only = arg('only');
 
 const site = getSite(siteId);
 if (!site) fail('Usage: npm run db:import -- --site <id> --from <path to content folder> [--dry-run]');
 if (!from || !existsSync(from)) fail(`Content folder not found: ${from}`);
 
 const plan = [];
+if (only && !site.collections[only]) fail(`${siteId} has no section "${only}"`);
+
 for (const [name, collection] of Object.entries(site.collections)) {
+  if (only && name !== only) continue;
   const file = path.join(from, `${collection.file}.json`);
   if (!existsSync(file)) {
     console.warn(`skip ${name}: ${file} does not exist`);
