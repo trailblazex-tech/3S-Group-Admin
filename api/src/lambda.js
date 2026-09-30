@@ -8,11 +8,15 @@ import { userFromClaims } from './core/access.js';
 import { createRouter } from './core/router.js';
 import { sites } from './sites/index.js';
 import { createDsqlStore } from './aws/dsql-store.js';
-import { createPublisher } from './aws/publisher.js';
+import { createPublisher, createWebhookResolver } from './aws/publisher.js';
 import { createS3Uploader } from './aws/s3-uploader.js';
+import { createSnapshotWriter } from './aws/snapshot.js';
 
 const maxBodyBytes = 512 * 1024;
-const publisher = createPublisher();
+const publisher = createPublisher({
+  snapshot: createSnapshotWriter({ bucket: process.env.MEDIA_BUCKET }),
+  resolveWebhook: createWebhookResolver(),
+});
 
 const router = createRouter({
   sites,

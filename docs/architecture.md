@@ -91,18 +91,28 @@ served by the site itself; the admin previews them against the site's
 
 ## Publishing
 
-1. Editors save; the database is the source of truth.
-2. **Publish** calls that site's build webhook, stored in SSM Parameter Store
-   at `/3s-admin/sites/<site>/publish-webhook` (SecureString; rotate without
-   a redeploy).
-3. The site build runs `scripts/pull-content.mjs` (in the site's repo), which
-   GETs `/api/delivery/<site>` - published records only, in order, shaped
-   exactly like the site's `content/*.json` - then builds as usual.
-4. If the pull fails the build fails, and hosting keeps the previous version
-   live. A site is never published from stale content.
+1. Editors save; the database is the source of truth. Saving alone changes
+   nothing on the website.
+2. **Publish** writes the site's snapshot - published records only, in
+   order, shaped exactly like the site's `content/*.json` - to the media
+   bucket at `delivery/<site>.json`, served by the media CloudFront with a
+   10-second cache and `Access-Control-Allow-Origin: *`. If this write
+   fails, the publish fails and nothing changes.
+3. **Visitors see it within seconds.** The site's pages fetch the snapshot
+   once at load, before rendering, and swap it into the content they were
+   built with (Konark: `src/content/live.ts`). Every visit reads a static
+   file from the nearest edge - no Lambda or database per visit. If the
+   fetch is slow or fails, the page shows the content it was built with.
+4. **Search engines catch up in minutes.** Publish then triggers the site's
+   rebuild (a webhook in SSM Parameter Store at
+   `/3s-admin/sites/<site>/publish-webhook`: a bare URL such as an Amplify
+   incoming webhook, or `{url, headers, body}` JSON such as a GitHub
+   repository_dispatch). The build pulls the same snapshot into
+   `content/*.json` and pre-renders real HTML for crawlers. A failed rebuild
+   doesn't undo the publish - visitors already have the snapshot.
 
-`/api/delivery/<site>` is unauthenticated on purpose: it returns only what
-is already public on that website, and is rate limited at the API.
+`/api/delivery/<site>` (the live database view of the same shape) remains
+for debugging and local tooling; sites read the snapshot.
 
 ## Operations and cost
 

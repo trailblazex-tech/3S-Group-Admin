@@ -10,6 +10,7 @@
 import crypto from 'node:crypto';
 import pg from 'pg';
 import { DsqlSigner } from '@aws-sdk/dsql-signer';
+import { buildDeliveryFiles } from '../core/delivery.js';
 
 const region = process.env.AWS_REGION || 'eu-north-1';
 const maxRowsPerStatement = 200;
@@ -106,7 +107,7 @@ export async function upsertCategories(client, site, collection, categories) {
 export function createDsqlStore(site, { publisher }) {
   const siteId = site.id;
 
-  return {
+  const store = {
     async load(collection) {
       const db = getPool();
       const [records, meta] = await Promise.all([
@@ -183,8 +184,10 @@ export function createDsqlStore(site, { publisher }) {
       return rows.map((row) => ({ ...row, at: new Date(row.at).toISOString() }));
     },
 
-    publish(user) {
-      return publisher.publish(site, user);
+    async publish() {
+      return publisher.publish(site, buildDeliveryFiles(site.collections, await store.loadAll()));
     },
   };
+
+  return store;
 }
