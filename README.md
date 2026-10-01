@@ -27,7 +27,7 @@ them on the website picker (`upcomingSites` in `api/src/sites/index.js`).
 - **Each site keeps its own content model** as code in
   [`api/src/sites/<site>/`](api/src/sites) - completely different businesses
   can share the platform without sharing a schema.
-- **The engine is generic.** Validation, ordering, soft deletes, categories,
+- **The engine is generic.** Validation, ordering, hide-or-delete, categories,
   uploads and the activity log work the same for every section of every site.
 
 More in [docs/architecture.md](docs/architecture.md).
@@ -59,6 +59,7 @@ npm run deploy:infra     # apply infra/template.yaml changes
 npm run library:build    # rebuild the ready-made greeting banners (Python + Pillow)
 npm run library:upload   # upload them to the media bucket
 
+npm run analytics:connect -- --site konark --property <id> --key <key.json>   # GA4 reports
 npm run user:invite -- --email a@b.com --name "A B" --sites konark
 npm run site:grant  -- --email a@b.com --site other-site [--revoke]
 ```

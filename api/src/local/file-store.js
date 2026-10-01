@@ -28,6 +28,19 @@ async function readJson(file) {
 export function createFileStore(site, { contentDir, dataDir }) {
   const fileFor = (collection) => path.join(contentDir, `${site.collections[collection].file}.json`);
   const activityFile = path.join(dataDir, `${site.id}-activity.jsonl`);
+  const submissionsFile = path.join(dataDir, `${site.id}-submissions.json`);
+
+  /** Every form's submissions in one small JSON file, newest last. */
+  function editSubmissions(work) {
+    return queued(submissionsFile, async () => {
+      const all = await readJson(submissionsFile);
+      const result = work(all);
+      await mkdir(dataDir, { recursive: true });
+      await writeFile(submissionsFile, `${JSON.stringify(all, null, 2)}
+`, 'utf8');
+      return result;
+    });
+  }
 
   async function load(name) {
     const collection = site.collections[name];
@@ -64,6 +77,18 @@ export function createFileStore(site, { contentDir, dataDir }) {
 
         await mkdir(path.dirname(file), { recursive: true });
         await writeFile(file, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
+      });
+    },
+
+    purge(name, id) {
+      const collection = site.collections[name];
+      const file = fileFor(name);
+
+      return queued(file, async () => {
+        const data = await readJson(file);
+        data[collection.key] = (data[collection.key] ?? []).filter((record) => record.id !== id);
+        await writeFile(file, `${JSON.stringify(data, null, 2)}
+`, 'utf8');
       });
     },
 
@@ -104,6 +129,42 @@ export function createFileStore(site, { contentDir, dataDir }) {
           }
         })
         .filter(Boolean);
+    },
+
+    addSubmission(form, submission) {
+      return editSubmissions((all) => {
+        (all[form] ??= []).push({ status: 'new', note: '', ...submission });
+      });
+    },
+
+    async submissions(form, limit) {
+      const all = await readJson(submissionsFile);
+      return (all[form] ?? []).slice(-limit).reverse();
+    },
+
+    async submissionCounts() {
+      const all = await readJson(submissionsFile);
+      return Object.fromEntries(
+        Object.entries(all).map(([form, list]) => [form, { total: list.length, unread: list.filter((entry) => entry.status === 'new').length }]),
+      );
+    },
+
+    updateSubmission(form, id, changes) {
+      return editSubmissions((all) => {
+        const entry = (all[form] ?? []).find((item) => item.id === id);
+        if (!entry) return false;
+        if (changes.status) entry.status = changes.status;
+        if ('note' in changes) entry.note = changes.note ?? '';
+        return true;
+      });
+    },
+
+    deleteSubmission(form, id) {
+      return editSubmissions((all) => {
+        const before = (all[form] ?? []).length;
+        all[form] = (all[form] ?? []).filter((item) => item.id !== id);
+        return all[form].length < before;
+      });
     },
 
     async publish() {

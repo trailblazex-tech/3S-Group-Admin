@@ -533,6 +533,17 @@ Resources:
       AuthorizationType: NONE
       Target: !Sub integrations/${ApiIntegration}
 
+  # Visitors' form submissions (feedback, enquiries) from the sites
+  # themselves - no sign-in. The Lambda checks the site, the form, the
+  # Origin, a honeypot, and per-address bursts; the stage throttles the route.
+  FormsRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: ANY /api/forms/{site}/{form}
+      AuthorizationType: NONE
+      Target: !Sub integrations/${ApiIntegration}
+
   ApiAccessLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -541,6 +552,7 @@ Resources:
 
   ApiStage:
     Type: AWS::ApiGatewayV2::Stage
+    DependsOn: FormsRoute
     Properties:
       ApiId: !Ref HttpApi
       StageName: $default
@@ -548,6 +560,10 @@ Resources:
       DefaultRouteSettings:
         ThrottlingBurstLimit: 50
         ThrottlingRateLimit: 25
+      RouteSettings:
+        ANY /api/forms/{site}/{form}:
+          ThrottlingBurstLimit: 10
+          ThrottlingRateLimit: 3
       AccessLogSettings:
         DestinationArn: !GetAtt ApiAccessLogGroup.Arn
         Format: '{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","time":"$context.requestTime","method":"$context.httpMethod","path":"$context.path","status":"$context.status","latency":"$context.responseLatency","user":"$context.authorizer.claims.email","error":"$context.error.message","authError":"$context.authorizer.error"}'

@@ -11,6 +11,7 @@ import { createDsqlStore } from './aws/dsql-store.js';
 import { createPublisher, createWebhookResolver } from './aws/publisher.js';
 import { createS3Uploader } from './aws/s3-uploader.js';
 import { createSnapshotWriter } from './aws/snapshot.js';
+import { createAnalyticsCredentials } from './aws/analytics-credentials.js';
 
 const maxBodyBytes = 512 * 1024;
 const publisher = createPublisher({
@@ -24,6 +25,7 @@ const router = createRouter({
   uploader: createS3Uploader({ bucket: process.env.MEDIA_BUCKET, mediaBaseUrl: process.env.MEDIA_BASE_URL }),
   mediaBaseUrl: process.env.MEDIA_BASE_URL,
   upcoming: upcomingSites,
+  analyticsCredentials: createAnalyticsCredentials(),
 });
 
 function respond(status, body, headers = {}) {
@@ -45,6 +47,7 @@ export async function handler(event) {
   const path = (event.rawPath ?? '/').replace(/^\/api(?=\/|$)/, '') || '/';
 
   let body = {};
+  // Public forms post as text/plain (no CORS preflight); the body is JSON either way.
   if (event.body && (method === 'POST' || method === 'PUT')) {
     const raw = event.isBase64Encoded ? Buffer.from(event.body, 'base64').toString('utf8') : event.body;
     if (raw.length > maxBodyBytes) return respond(413, { error: 'That is too much data to save at once.' });
@@ -59,13 +62,20 @@ export async function handler(event) {
   }
 
   const user = userFromClaims(event.requestContext?.authorizer?.jwt?.claims);
+  const headers = Object.fromEntries(Object.entries(event.headers ?? {}).map(([key, value]) => [key.toLowerCase(), value]));
+  // Behind CloudFront the connecting address is the edge; the visitor is the
+  // first X-Forwarded-For entry.
+  const ip = (headers['x-forwarded-for'] ?? '').split(',')[0].trim() || event.requestContext?.http?.sourceIp;
   const result = await router.routeRequest({
     method,
     path,
     query: event.queryStringParameters ?? {},
     body,
     user,
+    headers,
+    ip,
   });
+  if (result.status === 204) return { statusCode: 204, headers: result.headers ?? {} };
 
   return respond(result.status, result.body, result.headers);
 }

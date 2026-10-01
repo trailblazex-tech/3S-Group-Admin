@@ -52,10 +52,13 @@ manage, scales to zero cost when idle).
 | `content_records` | (site, collection, id) | every record of every section; fields as JSON text |
 | `collection_meta` | (site, collection) | editable category lists |
 | `activity_log` | (site, at, id) | who changed what, when |
+| `form_submissions` | (site, form, at, id) | what visitors sent from a site's forms, with follow-up status and note |
 
-- The Lambda connects as database role **`admin_api`**, which may SELECT,
-  INSERT and UPDATE - **no DELETE**. Deletes in the admin are soft (the record
-  is hidden and restorable).
+- The Lambda connects as database role **`admin_api`**: SELECT, INSERT and
+  UPDATE, plus DELETE on `content_records` and `form_submissions` only. Hiding
+  a record (the eye button, or "Just hide it") is soft and restorable;
+  "Delete permanently" - always behind a confirmation - removes one row. The
+  activity log is append-only.
 - Writes are per-record upserts in a transaction, retried on DSQL's
   optimistic-concurrency conflicts - two people editing different records
   never overwrite each other.
@@ -97,6 +100,27 @@ drawn illustrations, turned into short looping animated WEBPs (with a still
 twin for visitors who prefer reduced motion) by
 `scripts/greeting-library/build.py`, and served from the media bucket under
 `library/greetings/`. `sources.json` records where every photo came from.
+
+## Visitor forms and leads
+
+A site can declare public forms (`api/src/sites/<site>/forms.js` - Konark:
+parent feedback and admission enquiries). The website posts them to
+`POST /api/forms/<site>/<form>` with no sign-in: the Lambda checks the
+site's own origins (`formOrigins` in `site.js`), a honeypot field, bursts per
+address, and validates every field; API Gateway throttles that route
+separately (3/s, burst 10). Submissions land in `form_submissions` - never in
+the published snapshot - and editors read them under **Feedback & Leads**:
+ratings and interest at a glance, call / WhatsApp / email buttons, a
+follow-up status and note, CSV export for Excel, and permanent delete.
+
+## Website analytics
+
+The **Analytics** page reads the site's GA4 property through the GA4 Data
+API as a Google service account. Its key lives in SSM at
+`/3s-admin/sites/<site>/ga4` (SecureString, written by
+`npm run analytics:connect`); the browser never sees it, and reports are
+cached five minutes per Lambda container. Which GA4 stream the website
+*sends* to is separate: the measurement IDs under **Website Analytics**.
 
 ## Publishing
 

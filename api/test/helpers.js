@@ -22,6 +22,10 @@ export function memoryStore(initial = {}) {
       }
       if (categories) entry.categories = [...categories];
     },
+    async purge(name, id) {
+      const entry = data[name];
+      if (entry) entry.records = entry.records.filter((record) => record.id !== id);
+    },
     async counts() {
       return Object.fromEntries(
         Object.entries(data).map(([name, entry]) => [

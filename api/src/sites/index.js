@@ -3,6 +3,7 @@
  * (see docs/onboarding-a-site.md); nothing else in the engine changes.
  */
 import { assertValidCollections } from '../core/schema.js';
+import { assertValidForms } from '../core/forms.js';
 import konark from './konark/site.js';
 
 const all = [konark];
@@ -24,6 +25,7 @@ for (const site of all) {
   if (!/^[a-z0-9][a-z0-9-]{1,30}$/.test(site.id)) throw new Error(`Invalid site id "${site.id}"`);
   if (sites.has(site.id)) throw new Error(`Duplicate site id "${site.id}"`);
   assertValidCollections(site.id, site.collections);
+  assertValidForms(site.id, site.forms ?? {});
   sites.set(site.id, site);
 }
 
@@ -33,7 +35,15 @@ export function getSite(id) {
 
 /** What the admin panel needs to show a site in the switcher - never the collections. */
 export function describeSite(site) {
-  return { id: site.id, name: site.name, shortName: site.shortName, tagline: site.tagline ?? '', publicUrl: site.publicUrl, accent: site.accent };
+  return {
+    id: site.id,
+    name: site.name,
+    shortName: site.shortName,
+    tagline: site.tagline ?? '',
+    publicUrl: site.publicUrl,
+    accent: site.accent,
+    hasForms: Object.keys(site.forms ?? {}).length > 0,
+  };
 }
 
 export function describeUpcoming(site) {

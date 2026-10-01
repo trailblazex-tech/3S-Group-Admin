@@ -44,6 +44,13 @@
     @apply bg-background text-foreground antialiased;
   }
 
+  /* The workspace scrolls inside its own pane; the page itself never does. */
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
   body {
     font-family: 'Inter Variable', Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
   }
@@ -61,6 +68,17 @@
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
+  }
+
+  /* Slim scrollbars: the dark menu rail and the workspace each scroll on
+     their own, and a chunky default bar looked like a second page. */
+  .scroll-slim {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.35) transparent;
+  }
+  .scroll-slim-dark {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(0 0% 100% / 0.18) transparent;
   }
 
   .bg-brand-night {

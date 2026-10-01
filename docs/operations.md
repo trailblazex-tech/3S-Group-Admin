@@ -41,6 +41,16 @@ aws cloudformation describe-change-set --stack-name admin-3s --change-set-name r
   then `admin-reset-user-password`; they set a new password and authenticator at next sign-in.
 - Remove someone: `aws cognito-idp admin-disable-user ...` (keeps their history in the activity log).
 
+## Connecting Google Analytics reports
+
+```bash
+npm run analytics:connect -- --site konark --property <GA4 property id> --key <service-account.json>
+```
+
+The property id is digits (GA4 Admin > Property details), not the G-...
+measurement id. Add the service account's email to the property as a Viewer
+first. Until this runs, the Analytics page explains how to connect.
+
 ## Publishing per site
 
 Each site's "Publish" button posts to the webhook stored at
@@ -56,8 +66,10 @@ button says publishing isn't switched on (saving still works).
 
 ## Backups and recovery
 
-- Records are never hard-deleted by the app (the DB role cannot DELETE).
-  Anything "removed" in the admin is restorable with the eye button.
+- Hidden records stay restorable with the eye button. "Delete permanently"
+  (asked to confirm every time) removes the row for good - only content
+  records and form submissions can be deleted; the activity log records who
+  did it.
 - Uploaded media: the bucket is versioned; overwritten/removed objects are
   kept 30 days.
 - Aurora DSQL stores data across multiple availability zones. For an

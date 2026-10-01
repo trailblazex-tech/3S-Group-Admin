@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertCircle, ArrowUpRight, CheckCircle2, Loader2, RefreshCw } from 'lucide-react';
-import type { ActivityEntry } from '../lib/api';
+import { AlertCircle, ArrowUpRight, CheckCircle2, Inbox, Loader2, RefreshCw } from 'lucide-react';
+import type { ActivityEntry, FormSummary } from '../lib/api';
 import { useSite } from '../lib/site';
 import { relativeTime } from '../lib/time';
 
@@ -9,6 +9,7 @@ const actionWording: Record<string, string> = {
   create: 'added',
   update: 'updated',
   delete: 'removed',
+  purge: 'permanently deleted',
   reorder: 'reordered',
   publish: 'published the website',
 };
@@ -61,6 +62,7 @@ export function DashboardPage() {
   const { site, api, collections, path } = useSite();
   const [activity, setActivity] = useState<ActivityEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [forms, setForms] = useState<FormSummary[]>([]);
   const [publishState, setPublishState] = useState<{ busy: boolean; ok: boolean; message: string }>({
     busy: false,
     ok: true,
@@ -80,6 +82,11 @@ export function DashboardPage() {
     setPublishState({ busy: false, ok: true, message: '' });
     loadActivity();
   }, [loadActivity]);
+
+  useEffect(() => {
+    if (!site.hasForms) return;
+    api.forms().then(setForms).catch(() => setForms([]));
+  }, [api, site.hasForms]);
 
   const publish = async () => {
     setPublishState({ busy: true, ok: true, message: '' });
@@ -130,6 +137,29 @@ export function DashboardPage() {
         </p>
       )}
 
+      {forms.length > 0 && (
+        <Link
+          to={path('/leads')}
+          className="mt-6 flex flex-wrap items-center gap-4 rounded-xl border border-[#f59f0a]/40 bg-[#f59f0a]/[0.07] px-5 py-4 transition-colors hover:border-[#f59f0a]"
+        >
+          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#f59f0a] text-navy-deep">
+            <Inbox className="h-5 w-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-bold text-foreground">Feedback &amp; Leads</span>
+            <span className="block text-xs text-muted-foreground">
+              {forms.map((form) => `${form.total} ${form.label.toLowerCase()}`).join(' · ')}
+            </span>
+          </span>
+          {forms.some((form) => form.unread > 0) && (
+            <span className="rounded-full bg-navy px-3 py-1 text-xs font-bold text-white">
+              {forms.reduce((total, form) => total + form.unread, 0)} new
+            </span>
+          )}
+          <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
+        </Link>
+      )}
+
       <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {collections.map((collection) => {
           const hidden = collection.total - collection.published;
@@ -145,7 +175,7 @@ export function DashboardPage() {
               </p>
               <p className="mt-2 text-3xl font-bold tabular-nums text-foreground">{collection.published}</p>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                {collection.fixed ? 'rows' : hidden > 0 ? `${hidden} hidden` : 'all published'}
+                {collection.display === 'form' ? 'settings' : collection.fixed ? 'rows' : hidden > 0 ? `${hidden} hidden` : 'all published'}
               </p>
             </Link>
           );

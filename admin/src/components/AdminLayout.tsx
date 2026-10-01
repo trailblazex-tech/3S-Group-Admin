@@ -9,6 +9,8 @@ import {
   ChevronsUpDown,
   ExternalLink,
   FileText,
+  Inbox,
+  LineChart,
   Images,
   LayoutDashboard,
   LayoutGrid,
@@ -20,6 +22,7 @@ import {
   Phone,
   ReceiptText,
   Shield,
+  Sparkles,
   Trophy,
   Users,
   Video,
@@ -42,7 +45,15 @@ const collectionIcons: Record<string, typeof Users> = {
   'site-analytics': BarChart3,
   'event-greetings': Megaphone,
   'home-announcement': MessageSquareText,
+  'home-stats': Sparkles,
 };
+
+/**
+ * Groups the website itself highlights get the same highlight here, so
+ * editors find them where they expect: the Konark site marks "CBSE Mandatory
+ * Disclosure" in its yellow, and so does this menu.
+ */
+const highlightedGroups = new Set(['CBSE Disclosure']);
 
 const groupIcons: Record<string, typeof Users> = {
   'CBSE Disclosure': Shield,
@@ -147,8 +158,9 @@ interface AdminLayoutProps {
 }
 
 export function AdminLayout({ user, sites, upcoming, onSignOut, children }: AdminLayoutProps) {
-  const { site, collections, path } = useSite();
+  const { site, api, collections, path } = useSite();
   const [isNavOpen, setIsNavOpen] = useState(false);
+  const [unreadLeads, setUnreadLeads] = useState(0);
   const location = useLocation();
   const mainRef = useRef<HTMLElement>(null);
 
@@ -158,16 +170,34 @@ export function AdminLayout({ user, sites, upcoming, onSignOut, children }: Admi
     setIsNavOpen(false);
   }, [location.pathname]);
 
+  // New feedback and enquiries since someone last went through them.
+  useEffect(() => {
+    if (!site.hasForms) return;
+    let alive = true;
+    api
+      .forms()
+      .then((forms) => alive && setUnreadLeads(forms.reduce((total, form) => total + form.unread, 0)))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [api, site.hasForms, location.pathname]);
+
   const linkClass = ({ isActive }: { isActive: boolean }) =>
     `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
       isActive ? 'bg-white/[0.14] text-white' : 'text-white/70 hover:bg-white/[0.08] hover:text-white'
+    }`;
+
+  const highlightLinkClass = ({ isActive }: { isActive: boolean }) =>
+    `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+      isActive ? 'bg-[#f59f0a] text-navy-deep shadow-sm' : 'text-[#fbc04d] hover:bg-[#f59f0a]/15 hover:text-[#ffd27a]'
     }`;
 
   const ungrouped = collections.filter((collection) => !collection.group);
   const groups = [...new Set(collections.map((collection) => collection.group).filter(Boolean))] as string[];
 
   return (
-    <div className="h-dvh overflow-hidden lg:grid lg:grid-cols-[272px_1fr]">
+    <div className="h-dvh overflow-hidden lg:grid lg:grid-cols-[272px_minmax(0,1fr)]">
       <aside
         className={`fixed inset-y-0 left-0 z-40 flex w-[272px] flex-col bg-brand-night transition-transform lg:static lg:h-dvh lg:translate-x-0 ${
           isNavOpen ? 'translate-x-0' : '-translate-x-full'
@@ -196,10 +226,25 @@ export function AdminLayout({ user, sites, upcoming, onSignOut, children }: Admi
           <SiteSwitcher sites={sites} upcoming={upcoming} current={site} />
         </div>
 
-        <nav className="flex-1 overflow-y-auto p-3" aria-label={`${site.name} sections`}>
+        <nav className="scroll-slim-dark flex-1 overflow-y-auto overscroll-contain p-3" aria-label={`${site.name} sections`}>
           <NavLink to={path('/')} end className={linkClass}>
             <LayoutDashboard className="h-4 w-4 shrink-0" />
             Dashboard
+          </NavLink>
+          {site.hasForms && (
+            <NavLink to={path('/leads')} className={linkClass}>
+              <Inbox className="h-4 w-4 shrink-0" />
+              <span className="flex-1 truncate">Feedback &amp; Leads</span>
+              {unreadLeads > 0 && (
+                <span className="rounded-full bg-[#f59f0a] px-1.5 py-px text-[10px] font-bold tabular-nums text-navy-deep" title={`${unreadLeads} new`}>
+                  {unreadLeads > 99 ? '99+' : unreadLeads}
+                </span>
+              )}
+            </NavLink>
+          )}
+          <NavLink to={path('/analytics')} className={linkClass}>
+            <LineChart className="h-4 w-4 shrink-0" />
+            Analytics
           </NavLink>
 
           {ungrouped.length > 0 && (
@@ -218,18 +263,23 @@ export function AdminLayout({ user, sites, upcoming, onSignOut, children }: Admi
 
           {groups.map((group) => {
             const GroupIcon = groupIcons[group] ?? FileText;
+            const isHighlighted = highlightedGroups.has(group);
             return (
-              <div key={group}>
-                <p className="flex items-center gap-2 px-3 pb-1 pt-5 text-[10px] font-bold uppercase tracking-[0.14em] text-white/40">
+              <div key={group} className={isHighlighted ? 'mt-4 rounded-xl bg-[#f59f0a]/[0.07] pb-1.5 ring-1 ring-inset ring-[#f59f0a]/25' : ''}>
+                <p
+                  className={`flex items-center gap-2 px-3 pb-1 text-[10px] font-bold uppercase tracking-[0.14em] ${
+                    isHighlighted ? 'pt-3 text-[#fbc04d]' : 'pt-5 text-white/40'
+                  }`}
+                >
                   <GroupIcon className="h-3 w-3" />
                   {group}
                 </p>
                 {collections
                   .filter((collection) => collection.group === group)
                   .map((collection) => (
-                    <NavLink key={collection.name} to={path(`/c/${collection.name}`)} className={linkClass}>
+                    <NavLink key={collection.name} to={path(`/c/${collection.name}`)} className={isHighlighted ? highlightLinkClass : linkClass}>
                       <span className="flex-1 truncate pl-7">{collection.label}</span>
-                      <span className="text-xs font-semibold tabular-nums text-white/40">{collection.total}</span>
+                      <span className={`text-xs font-semibold tabular-nums ${isHighlighted ? 'opacity-60' : 'text-white/40'}`}>{collection.total}</span>
                     </NavLink>
                   ))}
               </div>
@@ -292,8 +342,15 @@ export function AdminLayout({ user, sites, upcoming, onSignOut, children }: Admi
           <span className="truncate text-sm font-bold">{site.name}</span>
         </header>
 
-        <main ref={mainRef} className="min-w-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-          {children}
+        {/* The only scrolling area for content. Padding lives on the inner box,
+            not here: a sticky save bar sticks to the scroll area's padding edge,
+            so padding here left a gap under it that content showed through.
+            `relative` keeps any absolutely positioned child inside this pane. */}
+        <main ref={mainRef} className="scroll-slim relative min-w-0 flex-1 overflow-y-auto overscroll-contain">
+          <div className="px-4 pt-6 sm:px-6 lg:px-8 lg:pt-8">
+            {children}
+            <div aria-hidden className="h-8 lg:h-10" />
+          </div>
         </main>
       </div>
     </div>

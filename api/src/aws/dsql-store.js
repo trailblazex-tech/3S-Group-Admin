@@ -4,8 +4,9 @@
  * so the engine above it cannot reach another site's rows.
  *
  * Schema: scripts/db/schema.sql. The Lambda connects as the least-privilege
- * database role admin_api (SELECT/INSERT/UPDATE only - no DELETE, deletes in
- * the admin are soft), never as the cluster superuser.
+ * database role admin_api, never as the cluster superuser. Removing a record
+ * in the admin is soft (it is hidden and restorable); "Delete permanently"
+ * is the one path that issues a DELETE, always for a single row.
  */
 import crypto from 'node:crypto';
 import pg from 'pg';
@@ -66,6 +67,10 @@ async function withTransaction(work) {
 
 function rowToRecord(row) {
   return { ...JSON.parse(row.data), id: row.id, sortOrder: row.sort_order, isActive: row.is_active };
+}
+
+function rowToSubmission(row) {
+  return { ...JSON.parse(row.data), id: row.id, at: new Date(row.at).toISOString(), status: row.status, note: row.note ?? '' };
 }
 
 function recordToRow(record) {
@@ -147,6 +152,12 @@ export function createDsqlStore(site, { publisher }) {
       });
     },
 
+    async purge(collection, id) {
+      await withTransaction((client) =>
+        client.query('DELETE FROM content_records WHERE site = $1 AND collection = $2 AND id = $3', [siteId, collection, id]),
+      );
+    },
+
     async counts() {
       const { rows } = await getPool().query(
         `SELECT collection,
@@ -182,6 +193,49 @@ export function createDsqlStore(site, { publisher }) {
         [siteId, limit],
       );
       return rows.map((row) => ({ ...row, at: new Date(row.at).toISOString() }));
+    },
+
+    // -- Form submissions (feedback, enquiries) -----------------------------
+
+    async addSubmission(form, submission) {
+      const { id, at, status, note, ...data } = submission;
+      await getPool().query(
+        `INSERT INTO form_submissions (site, form, at, id, status, note, data, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, now())`,
+        [siteId, form, at, id, status ?? 'new', note ?? null, JSON.stringify(data)],
+      );
+    },
+
+    async submissions(form, limit) {
+      const { rows } = await getPool().query(
+        `SELECT at, id, status, note, data FROM form_submissions
+         WHERE site = $1 AND form = $2 ORDER BY at DESC LIMIT $3`,
+        [siteId, form, limit],
+      );
+      return rows.map(rowToSubmission);
+    },
+
+    async submissionCounts() {
+      const { rows } = await getPool().query(
+        `SELECT form, count(*)::int AS total, sum(CASE WHEN status = 'new' THEN 1 ELSE 0 END)::int AS unread
+         FROM form_submissions WHERE site = $1 GROUP BY form`,
+        [siteId],
+      );
+      return Object.fromEntries(rows.map((row) => [row.form, { total: row.total, unread: row.unread }]));
+    },
+
+    async updateSubmission(form, id, changes) {
+      const { rowCount } = await getPool().query(
+        `UPDATE form_submissions SET status = COALESCE($4, status), note = CASE WHEN $5::boolean THEN $6 ELSE note END, updated_at = now()
+         WHERE site = $1 AND form = $2 AND id = $3`,
+        [siteId, form, id, changes.status ?? null, 'note' in changes, changes.note ?? null],
+      );
+      return rowCount > 0;
+    },
+
+    async deleteSubmission(form, id) {
+      const { rowCount } = await getPool().query('DELETE FROM form_submissions WHERE site = $1 AND form = $2 AND id = $3', [siteId, form, id]);
+      return rowCount > 0;
     },
 
     async publish() {

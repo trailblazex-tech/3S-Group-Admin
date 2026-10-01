@@ -20,6 +20,7 @@
     "db:import": "node scripts/db-import.mjs",
     "user:invite": "node scripts/invite-user.mjs",
     "site:grant": "node scripts/grant-site.mjs",
+    "analytics:connect": "node scripts/connect-analytics.mjs",
     "library:build": "python scripts/greeting-library/build.py",
     "library:upload": "node scripts/greeting-library/upload.mjs"
   },

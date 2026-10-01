@@ -18,6 +18,8 @@ export interface Site {
   tagline: string;
   publicUrl: string;
   accent: string;
+  /** The site has public forms (feedback, enquiries) the admin can read. */
+  hasForms?: boolean;
 }
 
 export interface FieldOption {
@@ -41,6 +43,10 @@ export interface FieldDefinition {
   default?: unknown;
   /** Image fields: offer the ready-made banner library. */
   library?: 'greetings';
+  /** Only applies (shown, and then required) while another field has one of these values. */
+  showWhen?: { field: string; is: (string | null)[] };
+  /** Selects: big tappable choices instead of a dropdown. */
+  appearance?: 'choices';
 }
 
 /** Names the date/time fields that decide when a record is on the website. */
@@ -67,6 +73,10 @@ export interface CollectionSummary {
   schedule: ScheduleFields | null;
   /** New records can start from a ready-made greeting. */
   templates: 'greetings' | null;
+  /** list: rows open their own form; form: one row edited in place; cards: every row's form on one page. */
+  display: 'list' | 'form' | 'cards';
+  /** Rows the website works out itself: id -> where the value comes from. */
+  derivedRows: Record<string, string> | null;
   fields: FieldDefinition[];
   total: number;
   published: number;
@@ -83,6 +93,58 @@ export interface ActivityEntry {
   recordId: string | null;
   title: string | null;
 }
+
+export interface FormFieldDefinition {
+  name: string;
+  type: 'text' | 'textarea' | 'phone' | 'email' | 'select' | 'ratings' | 'datetime';
+  label: string;
+  required?: boolean;
+  options?: FieldOption[];
+  items?: { name: string; label: string }[];
+}
+
+export interface FormSummary {
+  name: string;
+  label: string;
+  description: string;
+  titleField: string;
+  phoneField: string | null;
+  emailField: string | null;
+  ratingsField: string | null;
+  interestField: string | null;
+  fields: FormFieldDefinition[];
+  statuses: FieldOption[];
+  total: number;
+  unread: number;
+}
+
+export type Submission = Record<string, unknown> & { id: string; at: string; status: string; note: string };
+
+export interface AnalyticsTotals {
+  screenPageViews: number;
+  activeUsers: number;
+  newUsers: number;
+  sessions: number;
+  engagementRate: number;
+  averageSessionDuration: number;
+}
+
+export type AnalyticsReport =
+  | { configured: false }
+  | {
+      configured: true;
+      days: number;
+      generatedAt: string;
+      totals: AnalyticsTotals;
+      previous: AnalyticsTotals;
+      today: { views: number; visitors: number };
+      daily: { date: string; views: number; visitors: number }[];
+      pages: { path: string; title: string; views: number; visitors: number }[];
+      channels: { name: string; sessions: number }[];
+      devices: { name: string; visitors: number }[];
+      cities: { name: string; visitors: number }[];
+      actions: { name: string; label: string; count: number }[];
+    };
 
 export interface GreetingTemplate {
   id: string;
@@ -176,7 +238,9 @@ export function siteApi(siteId: string) {
     update: (collection: string, id: string, values: Record<string, unknown>) =>
       request<AdminRecord>(item(collection, id), { method: 'PUT', body: JSON.stringify(values) }),
 
-    remove: (collection: string, id: string) => request<{ ok: true }>(item(collection, id), { method: 'DELETE' }),
+    /** Hides the record (restorable), or with `permanent` deletes it for good. */
+    remove: (collection: string, id: string, permanent = false) =>
+      request<{ ok: true }>(`${item(collection, id)}${permanent ? '?permanent=1' : ''}`, { method: 'DELETE' }),
 
     reorder: (collection: string, ids: string[]) =>
       request<{ ok: true }>(`${item(collection)}/reorder`, { method: 'POST', body: JSON.stringify({ ids }) }),
@@ -187,6 +251,19 @@ export function siteApi(siteId: string) {
     publish: () => request<{ queued: boolean; message: string }>(`${base}/publish`, { method: 'POST' }),
 
     library: () => request<GreetingLibrary>(`${base}/library`),
+
+    forms: () => request<{ forms: FormSummary[] }>(`${base}/forms`).then((r) => r.forms),
+
+    submissions: (form: string) =>
+      request<{ submissions: Submission[] }>(`${base}/forms/${encodeURIComponent(form)}`).then((r) => r.submissions),
+
+    updateSubmission: (form: string, id: string, changes: { status?: string; note?: string }) =>
+      request<{ ok: true }>(`${base}/forms/${encodeURIComponent(form)}/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(changes) }),
+
+    deleteSubmission: (form: string, id: string) =>
+      request<{ ok: true }>(`${base}/forms/${encodeURIComponent(form)}/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+    analytics: (days: number) => request<AnalyticsReport>(`${base}/analytics?days=${days}`),
 
     /** Asks for a one-time grant, then uploads the file straight to storage. */
     async upload(collection: string, file: File) {

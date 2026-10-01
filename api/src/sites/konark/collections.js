@@ -71,6 +71,20 @@ export const collections = {
         label: 'Highlights',
         help: 'Short points shown on leadership profile cards.',
       },
+      {
+        name: 'cbseCategory',
+        type: 'select',
+        label: 'Counted on the CBSE disclosure as',
+        help: 'The staff numbers on the CBSE disclosure page are counted from this directory. Leave on "Not set" to go by the designation (PGT/HOD, TGT, PRT) and wing.',
+        options: [
+          { value: 'pgt', label: 'PGT (Post Graduate Teacher)' },
+          { value: 'tgt', label: 'TGT (Trained Graduate Teacher)' },
+          { value: 'prt', label: 'PRT (Primary Teacher)' },
+          { value: 'other', label: 'Other teaching / activity staff' },
+          { value: 'none', label: 'Not counted' },
+        ],
+        showWhen: { field: 'group', is: ['teaching'] },
+      },
       { name: 'featured', type: 'boolean', label: 'Feature this person', default: false },
       ...recordFields,
     ],
@@ -167,6 +181,9 @@ export const collections = {
   // CBSE prescribes the shape of this page, so these sections are `fixed`:
   // staff edit the values, they do not add or remove rows. An unfilled
   // document shows as Pending, which is what the board expects to see.
+  //
+  // The staff numbers table is not edited here at all: the website counts it
+  // from the Staff Directory (see the cbseCategory field there).
   // -------------------------------------------------------------------------
 
   'cbse-school-info': {
@@ -179,6 +196,7 @@ export const collections = {
     subtitleField: 'value',
     imageField: '',
     fixed: true,
+    derivedRows: { 'contact-numbers': 'Comes from Contact & Office Hours' },
     fields: [
       { name: 'label', type: 'text', label: 'Row', required: true, maxLength: 120 },
       { name: 'value', type: 'text', label: 'Value', required: true, maxLength: 300 },
@@ -252,23 +270,6 @@ export const collections = {
     ],
   },
 
-  'cbse-staff-counts': {
-    label: 'Staff Numbers',
-    group: 'CBSE Disclosure',
-    description: 'Teacher counts by category.',
-    file: 'cbse-disclosure',
-    key: 'staffCounts',
-    titleField: 'category',
-    subtitleField: 'count',
-    imageField: '',
-    fixed: true,
-    fields: [
-      { name: 'category', type: 'text', label: 'Category', required: true, maxLength: 120 },
-      { name: 'count', type: 'number', label: 'How many', required: true, min: 0 },
-      { name: 'sortOrder', type: 'number', label: 'Order', min: 1, adminOnly: true },
-    ],
-  },
-
   'cbse-staff-extras': {
     label: 'Staff Details',
     group: 'CBSE Disclosure',
@@ -318,19 +319,19 @@ export const collections = {
   },
 
   // -------------------------------------------------------------------------
-  // Homepage announcement - the pill above the headline on the home page.
-  // One row, edited in place.
+  // Home page hero: the announcement line above the headline, and the number
+  // tiles under the buttons. Both short, so every row is edited on one page.
   // -------------------------------------------------------------------------
 
   'home-announcement': {
     label: 'Homepage Announcement',
-    description: 'The short line shown above the headline on the home page, e.g. "Registration Open for Session 2026-27".',
+    description: 'The short line above the headline on the home page. Add more than one and they take turns, sliding every few seconds.',
     file: 'home',
     key: 'announcement',
     titleField: 'text',
     subtitleField: 'textHindi',
     imageField: '',
-    fixed: true,
+    display: 'cards',
     fields: [
       { name: 'text', type: 'text', label: 'Announcement', required: true, maxLength: 120, help: 'Keep it to one short line - it sits above the main headline.' },
       {
@@ -340,8 +341,64 @@ export const collections = {
         maxLength: 120,
         help: 'Shown when a visitor switches the website to Hindi. Leave empty to show the English line.',
       },
-      { name: 'isActive', type: 'boolean', label: 'Show on the home page', default: true },
+      { name: 'href', type: 'text', label: 'Link (optional)', maxLength: 300, help: 'Makes the line clickable, e.g. /admissions/guidelines or a full https:// link.' },
       { name: 'sortOrder', type: 'number', label: 'Order', min: 1, adminOnly: true },
+      { name: 'isActive', type: 'boolean', label: 'Show on the home page', default: true },
+    ],
+  },
+
+  'home-stats': {
+    label: 'Homepage Highlights',
+    description: 'The number tiles on the home page picture (years, students, awards). Up to four show, and a number can keep itself up to date.',
+    file: 'home',
+    key: 'stats',
+    titleField: 'label',
+    subtitleField: 'value',
+    imageField: '',
+    display: 'cards',
+    fields: [
+      { name: 'label', type: 'text', label: 'Caption', required: true, maxLength: 40, help: 'e.g. "Students" or "Awards Won".' },
+      {
+        name: 'source',
+        type: 'select',
+        label: 'The number',
+        required: true,
+        appearance: 'choices',
+        options: [
+          { value: 'manual', label: 'I type it' },
+          { value: 'years', label: 'Years since the school opened' },
+          { value: 'achievements', label: 'Achievements on the website' },
+          { value: 'staff', label: 'Teachers in the staff directory' },
+        ],
+      },
+      { name: 'value', type: 'text', label: 'Number to show', required: true, maxLength: 12, help: 'e.g. 800+', showWhen: { field: 'source', is: ['manual'] } },
+      {
+        name: 'foundedYear',
+        type: 'number',
+        label: 'Year the school opened',
+        required: true,
+        min: 1900,
+        max: 2100,
+        help: 'The tile counts up by itself every year.',
+        showWhen: { field: 'source', is: ['years'] },
+      },
+      {
+        name: 'icon',
+        type: 'select',
+        label: 'Icon',
+        required: true,
+        options: [
+          { value: 'GraduationCap', label: 'Graduation cap' },
+          { value: 'Users', label: 'People' },
+          { value: 'Trophy', label: 'Trophy' },
+          { value: 'Award', label: 'Medal' },
+          { value: 'BookOpen', label: 'Book' },
+          { value: 'School', label: 'School building' },
+          { value: 'Star', label: 'Star' },
+        ],
+      },
+      { name: 'sortOrder', type: 'number', label: 'Order', min: 1, adminOnly: true },
+      { name: 'isActive', type: 'boolean', label: 'Show on the home page', default: true },
     ],
   },
 
@@ -358,6 +415,7 @@ export const collections = {
     subtitleField: 'email',
     imageField: '',
     fixed: true,
+    display: 'form',
     fields: [
       { name: 'phone', type: 'text', label: 'Landline', required: true, maxLength: 30 },
       { name: 'secondaryPhone', type: 'text', label: 'Mobile 1', required: true, maxLength: 30 },
@@ -390,6 +448,7 @@ export const collections = {
     titleField: 'measurementIds',
     imageField: '',
     fixed: true,
+    display: 'form',
     fields: [
       {
         name: 'measurementIds',
@@ -482,6 +541,7 @@ export const collections = {
     subtitleField: 'eyebrow',
     imageField: '',
     fixed: true,
+    display: 'form',
     fields: [
       { name: 'eyebrow', type: 'text', label: 'Eyebrow', required: true, maxLength: 60 },
       { name: 'title', type: 'text', label: 'Title', required: true, maxLength: 60 },
@@ -494,24 +554,40 @@ export const collections = {
 
   'event-greetings': {
     label: 'Event Greetings',
-    description: 'Pop-up announcements and festival greetings for website visitors. Each one shows only between the start and end you choose; when two overlap, the one that started later wins.',
+    description: 'Pop-up announcements and festival greetings for website visitors. Each one shows only between the start and end you choose; when several are on at once, visitors swipe through them in one pop-up, newest first.',
     file: 'event-greetings',
     key: 'greetings',
-    titleField: 'title',
-    subtitleField: 'eventName',
+    titleField: 'eventName',
+    subtitleField: 'title',
     imageField: 'bannerImage',
     schedule: { start: 'startDate', startTime: 'startTime', end: 'endDate', endTime: 'endTime' },
     templates: 'greetings',
+    check: (record) => {
+      if (record.layout === 'banner' && !record.bannerImage) return 'A banner-only greeting needs a banner - choose one or upload a picture.';
+      if (record.layout !== 'banner' && !record.title && !record.message) return 'Add a headline or a message, or switch to "Banner only".';
+      return null;
+    },
     fields: [
       { name: 'eventName', type: 'text', label: 'Internal name', required: true, maxLength: 160, help: 'For your own reference - not shown to visitors.' },
-      { name: 'title', type: 'text', label: 'Headline', required: true, maxLength: 120 },
-      { name: 'message', type: 'textarea', label: 'Message', required: true, maxLength: 500 },
+      {
+        name: 'layout',
+        type: 'select',
+        label: 'What visitors see',
+        appearance: 'choices',
+        options: [
+          { value: 'full', label: 'Banner with headline and message' },
+          { value: 'banner', label: 'Banner only' },
+        ],
+        help: 'Banner only shows your picture large with no text - right for a designed poster or greeting card.',
+      },
+      { name: 'title', type: 'text', label: 'Headline', maxLength: 120, showWhen: { field: 'layout', is: [null, '', 'full'] } },
+      { name: 'message', type: 'textarea', label: 'Message', maxLength: 500, showWhen: { field: 'layout', is: [null, '', 'full'] } },
       {
         name: 'bannerImage',
         type: 'image',
-        label: 'Banner (optional)',
+        label: 'Banner',
         library: 'greetings',
-        help: 'Pick a ready-made animated banner, or upload your own photo or GIF. Wide pictures (16:9) fit best.',
+        help: 'Pick a ready-made animated banner, or upload your own photo, poster or GIF. Wide pictures (16:9) fit best with text; any shape works for banner only.',
       },
       { name: 'bannerAlt', type: 'text', label: 'Banner description', maxLength: 200, help: 'Read aloud by screen readers and shown if the image fails to load.' },
       { name: 'startDate', type: 'date', label: 'Show from', required: true },

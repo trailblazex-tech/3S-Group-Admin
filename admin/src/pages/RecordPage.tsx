@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, CalendarClock, FileText, ImagePlus, Images, Info, Loader2, Save, Upload } from 'lucide-react';
+import { ArrowLeft, CalendarClock, Check, CheckCircle2, Eye, FileText, ImagePlus, Images, Info, Loader2, Save, Trash2, Upload } from 'lucide-react';
 import type { AdminRecord, CollectionSummary, FieldDefinition, FieldOption, GreetingTemplate, ScheduleFields } from '../lib/api';
 import { useSite } from '../lib/site';
 import { fillOrg, loadGreetingLibrary } from '../lib/library';
 import { addDays, describeWindow, istNow, scheduleStatus, suggestDates } from '../lib/schedule';
 import { BannerPicker } from '../components/BannerPicker';
 import { ScheduleBadge } from '../components/ScheduleBadge';
+import { useConfirm } from '../components/ConfirmDialog';
+import { GreetingPreview } from '../components/GreetingPreview';
 
 type Values = Record<string, unknown>;
 
@@ -75,7 +77,9 @@ function UploadButton({ kind, collectionName, onUploaded }: { kind: 'image' | 'f
   return (
     <div className="space-y-1">
       <label
-        className={`inline-flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-input bg-muted px-3 text-xs font-semibold text-foreground transition-colors hover:bg-muted/70 ${
+        // relative: keeps the visually-hidden file input inside the label, so
+        // it can't stretch the page and add a second scrollbar.
+        className={`relative inline-flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-input bg-muted px-3 text-xs font-semibold text-foreground transition-colors hover:bg-muted/70 ${
           isUploading ? 'pointer-events-none opacity-70' : ''
         }`}
       >
@@ -97,20 +101,52 @@ function FieldInput({
   onChange,
   dynamicOptions,
   collectionName,
+  inputId,
 }: {
   field: FieldDefinition;
   value: unknown;
   onChange: (value: unknown) => void;
   dynamicOptions: Record<string, FieldOption[]>;
   collectionName: string;
+  /** Unique when several forms share a page. */
+  inputId?: string;
 }) {
   const { media } = useSite();
+  const id = inputId ?? field.name;
+
+  if (field.type === 'select' && field.appearance === 'choices') {
+    const current = String(value ?? '') || (field.required ? '' : (field.options?.[0]?.value ?? ''));
+    return (
+      <div role="radiogroup" aria-label={field.label} className="grid gap-2 sm:grid-cols-2">
+        {(field.options ?? []).map((option) => {
+          const selected = current === option.value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              onClick={() => onChange(option.value)}
+              className={`flex items-center gap-3 rounded-xl border-2 px-3.5 py-3 text-left text-sm font-semibold transition ${
+                selected ? 'border-accent bg-accent/10 text-foreground' : 'border-border bg-card text-muted-foreground hover:border-input hover:text-foreground'
+              }`}
+            >
+              <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${selected ? 'border-accent bg-accent text-navy-deep' : 'border-input'}`}>
+                {selected && <Check className="h-3 w-3" strokeWidth={3} />}
+              </span>
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
 
   if (field.type === 'boolean') {
     return (
       <label className="flex items-center gap-2.5 text-sm font-medium text-foreground">
         <input
-          id={field.name}
+          id={id}
           type="checkbox"
           checked={Boolean(value)}
           onChange={(event) => onChange(event.target.checked)}
@@ -125,7 +161,7 @@ function FieldInput({
     const text = String(value ?? '');
     return (
       <div>
-        <textarea id={field.name} rows={4} maxLength={field.maxLength} value={text} onChange={(event) => onChange(event.target.value)} className={inputClass} />
+        <textarea id={id} rows={4} maxLength={field.maxLength} value={text} onChange={(event) => onChange(event.target.value)} className={inputClass} />
         {field.maxLength && (
           <p className="mt-1 text-right text-[11px] tabular-nums text-muted-foreground">
             {text.length}/{field.maxLength}
@@ -143,7 +179,7 @@ function FieldInput({
     return (
       <div className="space-y-2">
         <select
-          id={field.name}
+          id={id}
           value={isCustom ? '__custom__' : current}
           onChange={(event) => onChange(event.target.value === '__custom__' ? ' ' : event.target.value)}
           className={inputClass}
@@ -190,20 +226,20 @@ function FieldInput({
         )}
         <details className="text-xs text-muted-foreground">
           <summary className="cursor-pointer">Or enter a link</summary>
-          <input id={field.name} type="text" value={current} onChange={(event) => onChange(event.target.value)} placeholder="https://... or /documents/..." className={`${inputClass} mt-2`} />
+          <input id={id} type="text" value={current} onChange={(event) => onChange(event.target.value)} placeholder="https://... or /documents/..." className={`${inputClass} mt-2`} />
         </details>
       </div>
     );
   }
 
   if (field.type === 'date') {
-    return <input id={field.name} type="date" value={String(value ?? '')} onChange={(event) => onChange(event.target.value)} className={inputClass} />;
+    return <input id={id} type="date" value={String(value ?? '')} onChange={(event) => onChange(event.target.value)} className={inputClass} />;
   }
 
   if (field.type === 'time') {
     return (
       <div className="flex gap-2">
-        <input id={field.name} type="time" value={String(value ?? '')} onChange={(event) => onChange(event.target.value)} className={inputClass} />
+        <input id={id} type="time" value={String(value ?? '')} onChange={(event) => onChange(event.target.value)} className={inputClass} />
         {Boolean(value) && (
           <button type="button" onClick={() => onChange('')} className="shrink-0 rounded-lg border border-border px-3 text-xs font-semibold text-muted-foreground hover:bg-muted">
             Clear
@@ -214,7 +250,7 @@ function FieldInput({
   }
 
   if (field.type === 'image' && field.library) {
-    return <LibraryImageInput field={field} value={String(value ?? '')} onChange={onChange} collectionName={collectionName} />;
+    return <LibraryImageInput inputId={id} value={String(value ?? '')} onChange={onChange} collectionName={collectionName} />;
   }
 
   if (field.type === 'image') {
@@ -232,7 +268,7 @@ function FieldInput({
           <UploadButton kind="image" collectionName={collectionName} onUploaded={onChange} />
           <details className="text-xs text-muted-foreground">
             <summary className="cursor-pointer">Or enter an image link</summary>
-            <input id={field.name} type="text" value={current} onChange={(event) => onChange(event.target.value)} placeholder="https://... or /images/..." className={`${inputClass} mt-2`} />
+            <input id={id} type="text" value={current} onChange={(event) => onChange(event.target.value)} placeholder="https://... or /images/..." className={`${inputClass} mt-2`} />
           </details>
           {current && (
             <button type="button" onClick={() => onChange('')} className="text-xs font-semibold text-muted-foreground underline hover:text-destructive">
@@ -246,7 +282,7 @@ function FieldInput({
 
   return (
     <input
-      id={field.name}
+      id={id}
       type={field.type === 'number' ? 'number' : 'text'}
       inputMode={field.type === 'number' ? 'numeric' : undefined}
       min={field.min}
@@ -260,7 +296,7 @@ function FieldInput({
 }
 
 /** A banner field: ready-made animated banners first, uploading second. */
-function LibraryImageInput({ field, value, onChange, collectionName }: { field: FieldDefinition; value: string; onChange: (value: unknown) => void; collectionName: string }) {
+function LibraryImageInput({ inputId, value, onChange, collectionName }: { inputId: string; value: string; onChange: (value: unknown) => void; collectionName: string }) {
   const { media } = useSite();
   const [isPicking, setIsPicking] = useState(false);
 
@@ -272,7 +308,7 @@ function LibraryImageInput({ field, value, onChange, collectionName }: { field: 
         ) : (
           <button type="button" onClick={() => setIsPicking(true)} className="flex h-full w-full flex-col items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground">
             <ImagePlus className="h-7 w-7" />
-            No banner - the greeting shows as text only
+            No banner yet - choose one or upload your own
           </button>
         )}
       </div>
@@ -294,7 +330,7 @@ function LibraryImageInput({ field, value, onChange, collectionName }: { field: 
       </div>
       <details className="text-xs text-muted-foreground">
         <summary className="cursor-pointer">Or paste an image or GIF link</summary>
-        <input id={field.name} type="text" value={value} onChange={(event) => onChange(event.target.value)} placeholder="https://..." className={`${inputClass} mt-2`} />
+        <input id={inputId} type="text" value={value} onChange={(event) => onChange(event.target.value)} placeholder="https://..." className={`${inputClass} mt-2`} />
       </details>
       {isPicking && (
         <BannerPicker
@@ -409,28 +445,64 @@ function valuesFromTemplate(template: GreetingTemplate, fields: FieldDefinition[
   return Object.fromEntries(Object.entries(values).filter(([name]) => has(name)));
 }
 
-export function RecordPage() {
-  const { name = '', id = '' } = useParams();
-  const navigate = useNavigate();
-  const { api, site, collections, refreshCollections, path } = useSite();
-  const collection = collections.find((entry) => entry.name === name);
-  const isNew = id === 'new';
-  const [searchParams] = useSearchParams();
-  const templateId = isNew ? searchParams.get('template') : null;
-  const [templateNote, setTemplateNote] = useState('');
+/** Whether a field applies right now (see showWhen on the server). */
+export function fieldApplies(field: FieldDefinition, values: Values) {
+  if (!field.showWhen) return true;
+  const raw = values[field.showWhen.field];
+  const value = raw === undefined || raw === '' ? null : raw;
+  return field.showWhen.is.some((option) => (option === '' ? value === null : option === value));
+}
 
-  const fields = useMemo(() => (collection?.fields ?? []).filter((field) => !field.adminOnly), [collection]);
-  const [values, setValues] = useState<Values>(() => emptyValues(fields));
+export interface RecordFormProps {
+  collection: CollectionSummary;
+  /** null for a new record. */
+  recordId: string | null;
+  /** page: the full-page editor with a sticky save bar. card: one of several forms on a page. */
+  variant: 'page' | 'card';
+  templateId?: string | null;
+  /** Skips the fetch when the caller already has the record (cards). */
+  initialRecord?: AdminRecord;
+  onSaved: (record: AdminRecord) => void;
+  onCancel?: () => void;
+  /** Called after the record was deleted for good; shows the Delete button. */
+  onDeleted?: () => void;
+  cancelLabel?: string;
+  /** The stored record, once fetched. */
+  onLoaded?: (record: AdminRecord) => void;
+}
+
+/**
+ * The editor for one record. Used as a full page (RecordPage), opened
+ * straight away for one-row sections (Contact & Office Hours), and as inline
+ * cards for short sections (announcements).
+ */
+export function RecordForm({ collection, recordId, variant, templateId = null, initialRecord, onSaved, onCancel, onDeleted, cancelLabel = 'Cancel', onLoaded }: RecordFormProps) {
+  const { api, site } = useSite();
+  const onLoadedRef = useRef(onLoaded);
+  useEffect(() => {
+    onLoadedRef.current = onLoaded;
+  }, [onLoaded]);
+  const isNew = recordId === null;
+  const [templateNote, setTemplateNote] = useState('');
+  const fields = useMemo(() => collection.fields.filter((field) => !field.adminOnly), [collection]);
+  const fromRecord = useCallback(
+    (record: AdminRecord) => Object.fromEntries(fields.map((field) => [field.name, toFormValue(field, record[field.name])])) as Values,
+    [fields],
+  );
+  const [values, setValues] = useState<Values>(() => (initialRecord ? fromRecord(initialRecord) : emptyValues(fields)));
   const [isDirty, setIsDirty] = useState(false);
-  const [isLoading, setIsLoading] = useState(!isNew);
+  const [isLoading, setIsLoading] = useState(!isNew && !initialRecord);
   const [isSaving, setIsSaving] = useState(false);
+  const [savedAt, setSavedAt] = useState(0);
   const [error, setError] = useState('');
   const [dynamicOptions, setDynamicOptions] = useState<Record<string, FieldOption[]>>({});
+  const [isPreviewing, setIsPreviewing] = useState(false);
+  const [confirm, confirmDialog] = useConfirm();
 
   useEffect(() => {
-    if (!collection) return;
     setError('');
     setIsDirty(false);
+    if (initialRecord) return;
 
     if (isNew) {
       setValues(emptyValues(fields));
@@ -461,19 +533,25 @@ export function RecordPage() {
       };
     }
 
+    let alive = true;
     setIsLoading(true);
     api
-      .get(collection.name, id)
-      .then((record: AdminRecord) => setValues(Object.fromEntries(fields.map((field) => [field.name, toFormValue(field, record[field.name])]))))
-      .catch((problem) => setError(problem instanceof Error ? problem.message : 'Could not load that record.'))
-      .finally(() => setIsLoading(false));
-  }, [api, collection, fields, id, isNew, templateId, site.name]);
+      .get(collection.name, recordId)
+      .then((record) => {
+        if (!alive) return;
+        setValues(fromRecord(record));
+        onLoadedRef.current?.(record);
+      })
+      .catch((problem) => alive && setError(problem instanceof Error ? problem.message : 'Could not load that record.'))
+      .finally(() => alive && setIsLoading(false));
+    return () => {
+      alive = false;
+    };
+  }, [api, collection, fields, recordId, isNew, templateId, site.name, initialRecord, fromRecord]);
 
   useEffect(() => {
-    if (!collection) return;
     const keys = new Set(collection.fields.map((field) => field.optionsFrom).filter(Boolean) as string[]);
     if (keys.size === 0) return;
-
     api
       .list(collection.name)
       .then((result) => setDynamicOptions(Object.fromEntries([...keys].map((key) => [key, result.groups]))))
@@ -487,30 +565,199 @@ export function RecordPage() {
     return () => window.removeEventListener('beforeunload', warn);
   }, [isDirty]);
 
-  if (!collection) return <p className="text-sm text-muted-foreground">That section does not exist.</p>;
-
-  const listPath = path(`/c/${collection.name}`);
+  const setValue = (name: string, next: unknown) => {
+    setIsDirty(true);
+    setSavedAt(0);
+    setValues((current) => ({ ...current, [name]: next }));
+  };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (isSaving) return;
     setIsSaving(true);
     setError('');
-
     try {
       const payload = toPayload(fields, values);
-      if (isNew) await api.create(collection.name, payload);
-      else await api.update(collection.name, id, payload);
+      const saved = isNew ? await api.create(collection.name, payload) : await api.update(collection.name, recordId, payload);
       setIsDirty(false);
-      refreshCollections();
-      navigate(listPath);
+      setSavedAt(Date.now());
+      onSaved(saved);
     } catch (problem) {
       setError(problem instanceof Error ? problem.message : 'Could not save.');
+    } finally {
       setIsSaving(false);
     }
   };
 
-  const title = isNew ? `Add to ${collection.label}` : String(values[collection.titleField] || 'Edit');
+  const askDelete = () => {
+    if (!recordId) return;
+    const title = String(values[collection.titleField] || 'this record');
+    confirm({
+      title: 'Delete permanently?',
+      danger: true,
+      message: (
+        <>
+          <span className="font-semibold text-foreground">"{title}"</span> will be deleted for good and cannot be brought back.
+          {collection.fields.some((field) => field.name === 'isActive') && ' To take it off the website but keep it, hide it instead.'}
+        </>
+      ),
+      confirmLabel: 'Delete permanently',
+      alternative: collection.fields.some((field) => field.name === 'isActive')
+        ? {
+            label: 'Just hide it',
+            onChoose: async () => {
+              await api.update(collection.name, recordId, { isActive: false });
+              setValues((current) => ({ ...current, isActive: false }));
+              onSaved({ ...(toPayload(fields, values) as AdminRecord), id: recordId, isActive: false });
+            },
+          }
+        : undefined,
+      onConfirm: async () => {
+        await api.remove(collection.name, recordId, true);
+        setIsDirty(false);
+        onDeleted?.();
+      },
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <div className={`space-y-5 rounded-xl border border-border bg-card ${variant === 'page' ? 'mt-6 p-6' : 'p-5'}`}>
+        {Array.from({ length: variant === 'page' ? 4 : 2 }).map((_, index) => (
+          <div key={index} className="animate-pulse space-y-2">
+            <div className="h-3.5 w-24 rounded bg-muted" />
+            <div className="h-10 rounded-lg bg-muted" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  const schedule = collection.schedule;
+  const visibleFields = fields.filter((field) => fieldApplies(field, values));
+  const isGreeting = collection.templates === 'greetings';
+  const canDelete = Boolean(onDeleted) && !isNew && !collection.fixed;
+  const showSaved = savedAt > 0 && !isDirty;
+
+  const footer = (
+    <>
+      <button
+        type="submit"
+        disabled={isSaving || (variant === 'card' && !isDirty && !isNew)}
+        className="inline-flex h-10 items-center gap-2 rounded-lg bg-navy px-5 text-sm font-bold text-white transition-colors hover:bg-navy-deep disabled:opacity-50"
+      >
+        {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+        {isSaving ? 'Saving...' : 'Save'}
+      </button>
+      {onCancel && (
+        <button type="button" onClick={onCancel} className="inline-flex h-10 items-center rounded-lg border border-border px-5 text-sm font-semibold text-foreground hover:bg-muted">
+          {cancelLabel}
+        </button>
+      )}
+      {isGreeting && (
+        <button type="button" onClick={() => setIsPreviewing(true)} className="inline-flex h-10 items-center gap-2 rounded-lg border border-border px-4 text-sm font-semibold text-foreground hover:bg-muted">
+          <Eye className="h-4 w-4" />
+          Preview
+        </button>
+      )}
+      {showSaved && (
+        <span role="status" className="inline-flex items-center gap-1.5 text-sm font-semibold text-success">
+          <CheckCircle2 className="h-4 w-4" />
+          Saved
+        </span>
+      )}
+      {canDelete && (
+        <button
+          type="button"
+          onClick={askDelete}
+          className="ml-auto inline-flex h-10 items-center gap-2 rounded-lg px-3 text-sm font-semibold text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+        >
+          <Trash2 className="h-4 w-4" />
+          <span className="hidden sm:inline">Delete</span>
+        </button>
+      )}
+    </>
+  );
+
+  return (
+    <form
+      className={variant === 'page' ? 'mt-6 rounded-xl border border-border bg-card' : 'rounded-xl border border-border bg-card shadow-sm'}
+      onSubmit={handleSubmit}
+      noValidate
+    >
+      <div className={`space-y-5 ${variant === 'page' ? 'p-5 sm:p-6' : 'p-4 sm:p-5'}`}>
+        {templateNote && (
+          <p className="flex items-start gap-2 rounded-lg bg-gold/15 px-3 py-2.5 text-sm text-foreground">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-navy" />
+            {templateNote}
+          </p>
+        )}
+        {visibleFields.map((field) => {
+          if (schedule && field.name === schedule.start) {
+            return <ScheduleEditor key="schedule" collection={collection} schedule={schedule} values={values} dynamicOptions={dynamicOptions} setValue={setValue} />;
+          }
+          if (schedule && [schedule.end, schedule.startTime, schedule.endTime].includes(field.name)) return null;
+          const inputId = variant === 'card' ? `${recordId ?? 'new'}-${field.name}` : field.name;
+          return (
+            <div key={field.name}>
+              {field.type !== 'boolean' && (
+                <label className="mb-1.5 block text-sm font-semibold text-foreground" htmlFor={inputId}>
+                  {field.label}
+                  {field.required && <span className="text-destructive"> *</span>}
+                </label>
+              )}
+              <FieldInput
+                field={field}
+                value={values[field.name]}
+                onChange={(next) => setValue(field.name, next)}
+                dynamicOptions={dynamicOptions}
+                collectionName={collection.name}
+                inputId={inputId}
+              />
+              {field.help && <p className="mt-1.5 text-xs text-muted-foreground">{field.help}</p>}
+            </div>
+          );
+        })}
+
+        {error && (
+          <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm font-semibold text-destructive">
+            {error}
+          </p>
+        )}
+      </div>
+
+      {/* The page editor's bar sticks to the bottom of the workspace while the
+          form scrolls under it; cards are short, so theirs just sits below. */}
+      <div
+        className={`flex flex-wrap items-center gap-3 rounded-b-xl border-t border-border px-5 py-3.5 sm:px-6 ${
+          variant === 'page' ? 'sticky bottom-0 z-10 bg-card/95 shadow-[0_-6px_16px_-12px_rgba(0,0,0,0.25)] backdrop-blur' : 'bg-muted/30'
+        }`}
+      >
+        {footer}
+      </div>
+
+      {isPreviewing && <GreetingPreview values={values} onClose={() => setIsPreviewing(false)} />}
+      {confirmDialog}
+    </form>
+  );
+}
+
+export function RecordPage() {
+  const { name = '', id = '' } = useParams();
+  const navigate = useNavigate();
+  const { collections, refreshCollections, path } = useSite();
+  const collection = collections.find((entry) => entry.name === name);
+  const isNew = id === 'new';
+  const [searchParams] = useSearchParams();
+  const [title, setTitle] = useState('');
+
+  if (!collection) return <p className="text-sm text-muted-foreground">That section does not exist.</p>;
+
+  const listPath = path(`/c/${collection.name}`);
+  const done = () => {
+    refreshCollections();
+    navigate(listPath);
+  };
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -519,87 +766,23 @@ export function RecordPage() {
         {collection.label}
       </Link>
 
-      <h1 className="mt-3 break-words font-display text-3xl font-semibold text-foreground">{title}</h1>
+      <h1 className="mt-3 break-words font-display text-3xl font-semibold text-foreground">{isNew ? `Add to ${collection.label}` : title || 'Edit'}</h1>
 
-      {isLoading ? (
-        <div className="mt-6 space-y-5 rounded-xl border border-border bg-card p-6">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="animate-pulse space-y-2">
-              <div className="h-3.5 w-24 rounded bg-muted" />
-              <div className="h-10 rounded-lg bg-muted" />
-            </div>
-          ))}
-        </div>
-      ) : (
-        <form className="mt-6 space-y-5 rounded-xl border border-border bg-card p-5 sm:p-6" onSubmit={handleSubmit}>
-          {templateNote && (
-            <p className="flex items-start gap-2 rounded-lg bg-gold/15 px-3 py-2.5 text-sm text-foreground">
-              <Info className="mt-0.5 h-4 w-4 shrink-0 text-navy" />
-              {templateNote}
-            </p>
-          )}
-          {fields.map((field) => {
-            const schedule = collection.schedule;
-            if (schedule && field.name === schedule.start) {
-              return (
-                <ScheduleEditor
-                  key="schedule"
-                  collection={collection}
-                  schedule={schedule}
-                  values={values}
-                  dynamicOptions={dynamicOptions}
-                  setValue={(fieldName, next) => {
-                    setIsDirty(true);
-                    setValues((current) => ({ ...current, [fieldName]: next }));
-                  }}
-                />
-              );
-            }
-            if (schedule && [schedule.end, schedule.startTime, schedule.endTime].includes(field.name)) return null;
-            return (
-            <div key={field.name}>
-              {field.type !== 'boolean' && (
-                <label className="mb-1.5 block text-sm font-semibold text-foreground" htmlFor={field.name}>
-                  {field.label}
-                  {field.required && <span className="text-destructive"> *</span>}
-                </label>
-              )}
-              <FieldInput
-                field={field}
-                value={values[field.name]}
-                onChange={(next) => {
-                  setIsDirty(true);
-                  setValues((current) => ({ ...current, [field.name]: next }));
-                }}
-                dynamicOptions={dynamicOptions}
-                collectionName={collection.name}
-              />
-              {field.help && <p className="mt-1.5 text-xs text-muted-foreground">{field.help}</p>}
-            </div>
-            );
-          })}
-
-          {error && (
-            <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm font-semibold text-destructive">
-              {error}
-            </p>
-          )}
-
-          <div className="sticky bottom-0 -mx-5 -mb-5 flex gap-3 rounded-b-xl border-t border-border bg-card/95 px-5 py-4 backdrop-blur sm:-mx-6 sm:-mb-6 sm:px-6">
-            <button
-              type="submit"
-              disabled={isSaving}
-              className="inline-flex h-10 items-center gap-2 rounded-lg bg-navy px-5 text-sm font-bold text-white transition-colors hover:bg-navy-deep disabled:opacity-60"
-            >
-              {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              {isSaving ? 'Saving...' : 'Save'}
-            </button>
-            <Link to={listPath} className="inline-flex h-10 items-center rounded-lg border border-border px-5 text-sm font-semibold text-foreground hover:bg-muted">
-              Cancel
-            </Link>
-          </div>
-        </form>
-      )}
+      <RecordForm
+        key={`${collection.name}/${id}`}
+        collection={collection}
+        recordId={isNew ? null : id}
+        templateId={isNew ? searchParams.get('template') : null}
+        variant="page"
+        onSaved={(record) => {
+          setTitle(String(record[collection.titleField] ?? ''));
+          done();
+        }}
+        onCancel={() => navigate(listPath)}
+        onDeleted={done}
+        onLoaded={(record) => setTitle(String(record[collection.titleField] ?? ''))}
+      />
     </div>
   );
 }
+

@@ -12,6 +12,8 @@ import { SignInPage } from './pages/SignInPage';
 import { ActivityPage, DashboardPage } from './pages/DashboardPage';
 import { CollectionPage } from './pages/CollectionPage';
 import { RecordPage } from './pages/RecordPage';
+import { LeadsPage } from './pages/LeadsPage';
+import { AnalyticsPage } from './pages/AnalyticsPage';
 
 function FullPage({ children }: { children: ReactNode }) {
   return (
@@ -224,6 +226,8 @@ function SiteWorkspace({ user, sites, upcoming, onSignOut }: { user: Me; sites: 
           <Route path="c/:name" element={<CollectionPage />} />
           <Route path="c/:name/:id" element={<RecordPage />} />
           <Route path="activity" element={<ActivityPage />} />
+          <Route path="leads" element={<LeadsPage />} />
+          <Route path="analytics" element={<AnalyticsPage />} />
           <Route path="*" element={<p className="text-sm text-muted-foreground">Page not found.</p>} />
         </Routes>
       </AdminLayout>

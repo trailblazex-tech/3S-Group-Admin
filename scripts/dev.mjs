@@ -16,6 +16,8 @@ import { createRouter } from '../api/src/core/router.js';
 import { sites, upcomingSites } from '../api/src/sites/index.js';
 import { createFileStore } from '../api/src/local/file-store.js';
 import { createLocalUploader } from '../api/src/local/local-uploader.js';
+import { parseCredentials } from '../api/src/core/analytics.js';
+import { readFileSync } from 'node:fs';
 
 if (existsSync('.env.local')) process.loadEnvFile('.env.local');
 
@@ -50,14 +52,22 @@ const router = createRouter({
   // domain; set MEDIA_BASE_URL (a stack output) to preview them locally.
   mediaBaseUrl: process.env.MEDIA_BASE_URL ?? '',
   upcoming: upcomingSites,
+  // Optional: LOCAL_GA4_<SITE>=<property id>:<path to the service account key JSON>
+  analyticsCredentials: async (site) => {
+    const setting = process.env[`LOCAL_GA4_${site.id.toUpperCase().replace(/-/g, '_')}`];
+    if (!setting) return null;
+    const [propertyId, keyFile] = [setting.slice(0, setting.indexOf(':')), setting.slice(setting.indexOf(':') + 1)];
+    return parseCredentials({ propertyId, serviceAccount: JSON.parse(readFileSync(keyFile, 'utf8')) });
+  },
 });
 
-function send(response, status, body) {
+function send(response, status, body, headers = {}) {
   response.writeHead(status, {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': adminOrigin,
     'Access-Control-Allow-Headers': 'authorization, content-type',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    ...headers,
   });
   response.end(body === null ? undefined : JSON.stringify(body));
 }
@@ -73,7 +83,8 @@ http
   .createServer(async (request, response) => {
     try {
       const url = new URL(request.url, apiOrigin);
-      if (request.method === 'OPTIONS') return send(response, 204, null);
+      const isPublicForm = url.pathname.startsWith('/forms/');
+      if (request.method === 'OPTIONS' && !isPublicForm) return send(response, 204, null);
       if (url.pathname === '/local-uploads' && request.method === 'POST') {
         return uploader.handleUpload(request, response, send);
       }
@@ -95,8 +106,10 @@ http
         query: Object.fromEntries(url.searchParams),
         body,
         user,
+        headers: request.headers,
+        ip: request.socket.remoteAddress,
       });
-      send(response, result.status, result.body);
+      send(response, result.status, result.status === 204 ? null : result.body, result.headers);
     } catch (error) {
       console.error(error);
       send(response, 500, { error: 'Local API failed.' });

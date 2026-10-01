@@ -34,3 +34,19 @@ CREATE TABLE IF NOT EXISTS activity_log (
   title       varchar(300),
   PRIMARY KEY (site, at, id)
 );
+
+-- What visitors send from a site's public forms (parent feedback, enquiries).
+-- Never part of a site's published content. Keyed (site, form, at, id) so
+-- "newest first for one form" is a single range scan; status and note are
+-- the office's follow-up, set from the admin.
+CREATE TABLE IF NOT EXISTS form_submissions (
+  site        varchar(40)  NOT NULL,
+  form        varchar(40)  NOT NULL,
+  at          timestamptz  NOT NULL,
+  id          varchar(40)  NOT NULL,
+  status      varchar(20)  NOT NULL DEFAULT 'new',
+  note        text,
+  data        text         NOT NULL,
+  updated_at  timestamptz  NOT NULL DEFAULT now(),
+  PRIMARY KEY (site, form, at, id)
+);

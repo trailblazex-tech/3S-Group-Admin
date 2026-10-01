@@ -12,12 +12,13 @@
  *                                         upserts the given records (only the
  *                                         ones that changed) and, if given,
  *                                         replaces the category list
+ *   purge(collection, id)                 deletes one record for good
  *   counts()                              -> { [collection]: { total, published } }
  *   log(entry)                            records an activity entry
  *   activity(limit)                       -> recent entries, newest first
  *   publish(user)                         -> { queued, message }
  */
-import { describeCollections, editableFields, getCollection } from './schema.js';
+import { describeCollections, editableFields, fieldApplies, getCollection } from './schema.js';
 import { slugify } from './slugify.js';
 
 export class ApiError extends Error {
@@ -143,12 +144,19 @@ function validateField(field, raw, categories) {
 
 function validateRecord(collection, body, { existing, categories }) {
   const record = existing ? { ...existing } : {};
+  // What the record will look like, so a field that only applies in some
+  // cases (showWhen) is only required in those cases.
+  const probe = { ...record, ...body };
 
   for (const field of editableFields(collection)) {
     // On update, a field the client did not send keeps its stored value.
     if (existing && !(field.name in body)) continue;
-    record[field.name] = validateField(field, body[field.name], categories);
+    const rule = field.required && !fieldApplies(field, probe) ? { ...field, required: false } : field;
+    record[field.name] = validateField(rule, body[field.name], categories);
   }
+
+  const problem = collection.check?.(record);
+  if (problem) throw new ApiError(400, problem);
 
   return record;
 }
@@ -291,6 +299,19 @@ export function createEngine({ store, collections }) {
       return { ok: true };
     },
 
+    /** Gone for good - for mistakes and old records nobody needs back. */
+    async purge(name, id, user) {
+      const { collection, records } = await loadCollection(name);
+      if (collection.fixed) throw new ApiError(400, `${collection.label} rows cannot be deleted - edit the row instead.`);
+
+      const existing = records.find((entry) => entry.id === id);
+      if (!existing) throw new ApiError(404, 'That record no longer exists.');
+
+      await store.purge(name, id);
+      await store.log({ user, action: 'purge', collection: name, recordId: id, title: existing[collection.titleField] });
+      return { ok: true };
+    },
+
     async reorder(name, ids, user) {
       if (!Array.isArray(ids) || ids.length === 0) throw new ApiError(400, 'Send the new order as a list of ids.');
 
@@ -357,7 +378,10 @@ export async function routeSiteRequest(engine, { method, path, query = {}, body 
     } else {
       if (method === 'GET') return { status: 200, body: await engine.get(first, second) };
       if (method === 'PUT') return { status: 200, body: await engine.update(first, second, body, user) };
-      if (method === 'DELETE') return { status: 200, body: await engine.remove(first, second, user) };
+      if (method === 'DELETE') {
+        const permanent = query.permanent === '1' || query.permanent === 'true';
+        return { status: 200, body: await (permanent ? engine.purge(first, second, user) : engine.remove(first, second, user)) };
+      }
     }
 
     throw new ApiError(405, `${method} is not allowed here.`);

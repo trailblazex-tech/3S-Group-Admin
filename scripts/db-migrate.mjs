@@ -32,8 +32,10 @@ try {
     console.log('ok  role admin_api already exists');
   }
 
-  // No DELETE anywhere: removals in the admin are soft.
-  await client.query('GRANT SELECT, INSERT, UPDATE ON content_records, collection_meta TO admin_api');
+  // DELETE only where the admin offers "Delete permanently" (one record, one
+  // submission at a time). The activity log stays append-only.
+  await client.query('GRANT SELECT, INSERT, UPDATE, DELETE ON content_records, form_submissions TO admin_api');
+  await client.query('GRANT SELECT, INSERT, UPDATE ON collection_meta TO admin_api');
   await client.query('GRANT SELECT, INSERT ON activity_log TO admin_api');
   console.log('ok  grants for admin_api');
 

@@ -27,17 +27,40 @@
  *                   (live, scheduled, ended) and a plain-words summary.
  *   templates     - "greetings": new records can start from a ready-made
  *                   festival or school occasion (core/greeting-library.js)
+ *   display       - how the admin opens the section:
+ *                   "list"  (default) a list; each row opens its own form
+ *                   "form"  one row, edited in place - the form opens directly
+ *                   "cards" every row's form open on one page, for short
+ *                           sections like announcements
+ *   check(record) - extra rule across fields; returns a message for the
+ *                   person filling the form, or nothing when the record is fine
+ *   derivedRows   - { [record id]: "where it comes from" } rows the website
+ *                   works out by itself; the admin shows them as automatic
  *
  * Field types: text | textarea | number | date | time | image | file | select | tags | boolean
  * Field options beyond the obvious ones:
  *   library       - on an image field, "greetings" offers the ready-made
  *                   banner library alongside uploading
+ *   showWhen      - { field, is: [values] }: the field only applies (is shown,
+ *                   and only then required) while another field has one of
+ *                   those values
+ *   appearance    - "choices" on a select: big tappable choices instead of a
+ *                   dropdown, for a decision that changes the rest of the form
  */
+
+export const displayModes = new Set(['list', 'form', 'cards']);
 
 export const fieldTypes = new Set(['text', 'textarea', 'number', 'date', 'time', 'image', 'file', 'select', 'tags', 'boolean']);
 
 export function getCollection(collections, name) {
   return Object.prototype.hasOwnProperty.call(collections, name) ? collections[name] : null;
+}
+
+/** Whether a field applies to this record (see showWhen). */
+export function fieldApplies(field, record) {
+  if (!field.showWhen) return true;
+  const value = record[field.showWhen.field] ?? null;
+  return field.showWhen.is.includes(value);
 }
 
 /** Fields a client may send values for. sortOrder is admin-only but set by reordering. */
@@ -63,6 +86,8 @@ export function describeCollections(collections) {
     fixed: Boolean(collection.fixed),
     schedule: collection.schedule ?? null,
     templates: collection.templates ?? null,
+    display: collection.display ?? 'list',
+    derivedRows: collection.derivedRows ?? null,
     fields: collection.fields,
   }));
 }
@@ -92,6 +117,12 @@ export function assertValidCollections(siteId, collections) {
       if (field.library && (field.type !== 'image' || field.library !== 'greetings')) {
         problems.push(`${where}.${field.name}: library "greetings" is only for image fields`);
       }
+      if (field.showWhen && (!field.showWhen.field || !Array.isArray(field.showWhen.is))) {
+        problems.push(`${where}.${field.name}: showWhen needs { field, is: [...] }`);
+      }
+      if (field.appearance && (field.appearance !== 'choices' || field.type !== 'select')) {
+        problems.push(`${where}.${field.name}: appearance "choices" is only for select fields`);
+      }
       if (field.optionsFrom && field.optionsFrom !== collection.groupsFrom) {
         problems.push(`${where}.${field.name}: optionsFrom must match the collection's groupsFrom`);
       }
@@ -111,6 +142,15 @@ export function assertValidCollections(siteId, collections) {
         }
       }
     }
+    for (const field of collection.fields) {
+      if (field.showWhen && !names.has(field.showWhen.field)) {
+        problems.push(`${where}.${field.name}: showWhen field "${field.showWhen.field}" is not a field`);
+      }
+    }
+    if (collection.display && !displayModes.has(collection.display)) {
+      problems.push(`${where}: unknown display "${collection.display}"`);
+    }
+    if (collection.check && typeof collection.check !== 'function') problems.push(`${where}: check must be a function`);
     if (collection.templates && collection.templates !== 'greetings') {
       problems.push(`${where}: unknown templates "${collection.templates}"`);
     }
