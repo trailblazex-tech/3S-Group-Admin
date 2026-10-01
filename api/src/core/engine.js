@@ -127,6 +127,12 @@ function validateField(field, raw, categories) {
       if (raw === undefined || raw === null || raw === '') return null;
       const list = Array.isArray(raw) ? raw : String(raw).split(',');
       const cleaned = list.map((entry) => cleanString(entry, 120)).filter(Boolean).slice(0, 50);
+      if (field.parseAs === 'ga4MeasurementId') {
+        const ids = [...new Set(cleaned.map((entry) => entry.toUpperCase()))];
+        const wrong = ids.find((id) => !/^G-[A-Z0-9]{4,20}$/.test(id));
+        if (wrong) throw new ApiError(400, `"${wrong}" is not a GA4 measurement ID - they look like G-XXXXXXXXXX.`);
+        return ids.length > 0 ? ids : null;
+      }
       return cleaned.length > 0 ? cleaned : null;
     }
 

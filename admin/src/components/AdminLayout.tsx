@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import {
+  BarChart3,
   Activity,
   BriefcaseBusiness,
   Check,
@@ -38,6 +39,7 @@ const collectionIcons: Record<string, typeof Users> = {
   achievements: Trophy,
   videos: Video,
   'site-settings': Phone,
+  'site-analytics': BarChart3,
   'event-greetings': Megaphone,
   'home-announcement': MessageSquareText,
 };

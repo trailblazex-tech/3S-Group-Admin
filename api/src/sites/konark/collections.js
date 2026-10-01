@@ -379,6 +379,31 @@ export const collections = {
     ],
   },
 
+  // Google Analytics 4 - which properties the website's tag reports to.
+  // One row, edited in place. Lives next to the contact settings in
+  // site-settings.json; the site reads it at page load (no rebuild needed).
+  'site-analytics': {
+    label: 'Website Analytics',
+    description: 'The Google Analytics 4 measurement IDs the website sends visits to.',
+    file: 'site-settings',
+    key: 'analytics',
+    titleField: 'measurementIds',
+    imageField: '',
+    fixed: true,
+    fields: [
+      {
+        name: 'measurementIds',
+        type: 'tags',
+        label: 'GA4 measurement IDs',
+        parseAs: 'ga4MeasurementId',
+        help:
+          'From Google Analytics: Admin > Data streams > the website stream > Measurement ID (G-XXXXXXXXXX). ' +
+          'Separate several with commas - every visit is sent to each. Leave empty to use the ID built into the website.',
+      },
+      { name: 'sortOrder', type: 'number', label: 'Order', min: 1, adminOnly: true },
+    ],
+  },
+
   videos: {
     label: 'Video Gallery',
     description: 'YouTube videos shown on the video gallery page.',

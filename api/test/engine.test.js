@@ -140,3 +140,12 @@ test('collection summary carries counts', async () => {
   assert.deepEqual([gallery.total, gallery.published], [2, 1]);
   assert.equal(summary.find((entry) => entry.name === 'info').total, 0);
 });
+
+test('GA4 measurement IDs are tidied and checked', async () => {
+  const { collections } = await import('../src/sites/konark/collections.js');
+  const engine = createEngine({ store: memoryStore({ 'site-analytics': { records: [{ id: 'analytics', sortOrder: 1 }] } }), collections });
+
+  const saved = await engine.update('site-analytics', 'analytics', { measurementIds: ' g-rl7k2vn8qw, G-87RSKVPTTW, G-RL7K2VN8QW ' }, alice);
+  assert.deepEqual(saved.measurementIds, ['G-RL7K2VN8QW', 'G-87RSKVPTTW']);
+  await assert.rejects(engine.update('site-analytics', 'analytics', { measurementIds: 'UA-12345-1' }, alice), { status: 400 });
+});
