@@ -5,7 +5,7 @@ import { ArrowUpRight, Loader2, LogOut, ShieldCheck } from 'lucide-react';
 import { ApiError, me, roleLabel, sessionExpired, siteApi, type CollectionSummary, type Me, type Site } from './lib/api';
 import { BrandLockup, BrandMark } from './components/Brand';
 import { hasOwnLogo, siteLogo } from './lib/siteLogos';
-import { auth } from './lib/auth';
+import { auth, idleLimitMs } from './lib/auth';
 import { SiteContext, mediaUrl, type SiteContextValue } from './lib/site';
 import { AdminLayout } from './components/AdminLayout';
 import { SignInPage } from './pages/SignInPage';
@@ -244,7 +244,7 @@ function SiteWorkspace({ user, sites, upcoming, onSignOut }: { user: Me; sites: 
 
 type Session =
   | { state: 'checking' }
-  | { state: 'signedOut' }
+  | { state: 'signedOut'; notice?: string }
   | { state: 'error'; message: string }
   | { state: 'ready'; user: Me; sites: Site[]; upcoming: Site[] };
 
@@ -281,8 +281,34 @@ export default function App() {
     setSession({ state: 'signedOut' });
   }, []);
 
+  // Inactivity signs out, so an admin left open on a shared computer closes
+  // itself. Checked on a timer and when the tab comes back (after sleep).
+  const isSignedIn = session.state === 'ready';
+  useEffect(() => {
+    if (!isSignedIn) return;
+    let lastActive = Date.now();
+    const touch = () => {
+      lastActive = Date.now();
+    };
+    const check = () => {
+      if (Date.now() - lastActive < idleLimitMs) return;
+      void auth.signOut().then(() =>
+        setSession({ state: 'signedOut', notice: `Signed out after ${idleLimitMs / 60000} minutes without activity. Sign in again to continue.` }),
+      );
+    };
+    const events = ['pointerdown', 'keydown', 'scroll', 'touchstart'] as const;
+    for (const name of events) window.addEventListener(name, touch, { passive: true, capture: true });
+    document.addEventListener('visibilitychange', check);
+    const timer = window.setInterval(check, 30 * 1000);
+    return () => {
+      for (const name of events) window.removeEventListener(name, touch, { capture: true });
+      document.removeEventListener('visibilitychange', check);
+      window.clearInterval(timer);
+    };
+  }, [isSignedIn]);
+
   if (session.state === 'checking') return <Spinner label="Checking your session..." />;
-  if (session.state === 'signedOut') return <SignInPage onSignedIn={load} />;
+  if (session.state === 'signedOut') return <SignInPage onSignedIn={load} notice={session.notice} />;
   if (session.state === 'error') {
     return (
       <FullPage>

@@ -55,8 +55,8 @@ function ErrorNote({ message }: { message: string }) {
   );
 }
 
-export function SignInPage({ onSignedIn }: { onSignedIn: () => void }) {
-  const [screen, setScreen] = useState<Screen>({ kind: 'credentials' });
+export function SignInPage({ onSignedIn, notice }: { onSignedIn: () => void; notice?: string }) {
+  const [screen, setScreen] = useState<Screen>({ kind: 'credentials', notice });
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');

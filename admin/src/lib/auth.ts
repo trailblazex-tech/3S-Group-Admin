@@ -2,8 +2,14 @@
  * Cognito sign-in (SRP - the password never leaves the browser) with
  * mandatory authenticator-app MFA. Amplify keeps the session and refreshes
  * tokens; the API receives the ID token, which carries the user's groups.
+ *
+ * The session lives in sessionStorage, not localStorage: closing the browser
+ * (or the tab) signs out, so a shared or office computer never stays logged
+ * in. Inactivity also signs out - see idleLimitMs.
  */
 import { Amplify } from 'aws-amplify';
+import { cognitoUserPoolsTokenProvider } from 'aws-amplify/auth/cognito';
+import { sessionStorage as amplifySessionStorage } from 'aws-amplify/utils';
 import {
   confirmResetPassword,
   confirmSignIn,
@@ -24,6 +30,19 @@ Amplify.configure({
     },
   },
 });
+cognitoUserPoolsTokenProvider.setKeyValueStorage(amplifySessionStorage);
+
+// Sessions from before the switch were kept in localStorage for days; drop them.
+try {
+  for (const key of Object.keys(window.localStorage)) {
+    if (key.startsWith('CognitoIdentityServiceProvider.')) window.localStorage.removeItem(key);
+  }
+} catch {
+  // Storage blocked (private mode, policy): nothing was kept there either.
+}
+
+/** Signed out after this long without a click, key press or scroll. */
+export const idleLimitMs = 30 * 60 * 1000;
 
 export type SignInStep =
   | { kind: 'done' }
