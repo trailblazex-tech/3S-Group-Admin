@@ -293,7 +293,7 @@ export default function App() {
     const check = () => {
       if (Date.now() - lastActive < idleLimitMs) return;
       void auth.signOut().then(() =>
-        setSession({ state: 'signedOut', notice: `Signed out after ${idleLimitMs / 60000} minutes without activity. Sign in again to continue.` }),
+        setSession({ state: 'signedOut', notice: `Signed out after ${idleLimitMs / 3600000} hours without activity. Sign in again to continue.` }),
       );
     };
     const events = ['pointerdown', 'keydown', 'scroll', 'touchstart'] as const;

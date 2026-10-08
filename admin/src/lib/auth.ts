@@ -42,7 +42,7 @@ try {
 }
 
 /** Signed out after this long without a click, key press or scroll. */
-export const idleLimitMs = 30 * 60 * 1000;
+export const idleLimitMs = 2 * 60 * 60 * 1000;
 
 export type SignInStep =
   | { kind: 'done' }
