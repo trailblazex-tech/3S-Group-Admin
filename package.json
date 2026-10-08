@@ -18,8 +18,10 @@
     "deploy:admin": "node scripts/deploy-admin.mjs",
     "db:migrate": "node scripts/db-migrate.mjs",
     "db:import": "node scripts/db-import.mjs",
+    "db:reset": "node scripts/db-reset-site.mjs",
     "user:invite": "node scripts/invite-user.mjs",
     "site:grant": "node scripts/grant-site.mjs",
+    "site:connect-amplify": "node scripts/connect-amplify-site.mjs",
     "analytics:connect": "node scripts/connect-analytics.mjs",
     "library:build": "python scripts/greeting-library/build.py",
     "library:upload": "node scripts/greeting-library/upload.mjs"

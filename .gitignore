@@ -11,3 +11,4 @@ Thumbs.db
 .dev-data/
 
 .claude/settings.local.json
+backups/
