@@ -13,7 +13,7 @@ export interface Me {
 
 /** How the signed-in person is shown in the admin: by their role, never their name. */
 export function roleLabel(user: Me) {
-  return user.isPlatformAdmin ? 'Platform admin' : 'Website editor';
+  return user.isPlatformAdmin ? 'Platform admin' : 'Admin';
 }
 
 export interface Site {
