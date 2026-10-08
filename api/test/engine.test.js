@@ -149,3 +149,78 @@ test('GA4 measurement IDs are tidied and checked', async () => {
   assert.deepEqual(saved.measurementIds, ['G-RL7K2VN8QW', 'G-87RSKVPTTW']);
   await assert.rejects(engine.update('site-analytics', 'analytics', { measurementIds: 'UA-12345-1' }, alice), { status: 400 });
 });
+
+async function konarkWings() {
+  const { collections } = await import('../src/sites/konark/collections.js');
+  const store = memoryStore({
+    'teaching-wings': {
+      records: [
+        { id: 'primary-wing', name: 'Primary Wing', sortOrder: 1, isActive: true },
+        { id: 'sports', name: 'Sports', sortOrder: 2, isActive: true },
+        { id: 'old-wing', name: 'Old Wing', sortOrder: 3, isActive: false },
+      ],
+    },
+    staff: {
+      records: [
+        { id: 'a', name: 'A', role: 'PRT', group: 'teaching', department: 'Primary Wing', sortOrder: 1, isActive: true },
+        { id: 'b', name: 'B', role: 'Coach', group: 'teaching', department: 'Sports', sortOrder: 2, isActive: true },
+        { id: 'c', name: 'C', role: 'Clerk', group: 'office', department: 'Accounts', sortOrder: 3, isActive: true },
+      ],
+    },
+  });
+  return { store, engine: createEngine({ store, collections }) };
+}
+
+test('the wing choices on a staff form come from Teaching Wings', async () => {
+  const { engine } = await konarkWings();
+  const staff = (await engine.listCollections()).find((entry) => entry.name === 'staff');
+  const department = staff.fields.find((field) => field.name === 'department');
+  assert.deepEqual(department.options.map((option) => option.value), ['Primary Wing', 'Sports']);
+});
+
+test('a new wing typed for a teacher is added to Teaching Wings; office departments are not', async () => {
+  const { engine, store } = await konarkWings();
+  await engine.create('staff', { name: 'D', role: 'Teacher', group: 'teaching', department: 'Robotics' }, alice);
+  await engine.create('staff', { name: 'E', role: 'Clerk', group: 'office', department: 'Front Office' }, alice);
+
+  const wings = store.data['teaching-wings'].records;
+  assert.deepEqual(wings.at(-1), { name: 'Robotics', id: 'robotics', sortOrder: 4, isActive: true });
+  assert.equal(wings.some((wing) => wing.name === 'Front Office'), false);
+});
+
+test('a teacher put in a hidden wing brings the wing back; case follows the wing', async () => {
+  const { engine, store } = await konarkWings();
+  const saved = await engine.update('staff', 'a', { department: 'old wing' }, alice);
+  assert.equal(saved.department, 'Old Wing');
+  assert.equal(store.data['teaching-wings'].records.find((wing) => wing.id === 'old-wing').isActive, true);
+});
+
+test('renaming a wing moves its teachers with it', async () => {
+  const { engine, store } = await konarkWings();
+  await engine.update('teaching-wings', 'sports', { name: 'Sports Wing' }, alice);
+  assert.equal(store.data.staff.records.find((member) => member.id === 'b').department, 'Sports Wing');
+  assert.equal(store.data.staff.records.find((member) => member.id === 'a').department, 'Primary Wing');
+});
+
+test('a wing with teachers in it cannot be hidden or deleted; an empty one can', async () => {
+  const { engine } = await konarkWings();
+  await assert.rejects(engine.update('teaching-wings', 'sports', { isActive: false }, alice), {
+    status: 400,
+    message: '"Sports" cannot be hidden while Staff Directory still lists "B" under it. Move them to another choice first.',
+  });
+  await assert.rejects(engine.remove('teaching-wings', 'sports', alice), { status: 400 });
+  await assert.rejects(engine.purge('teaching-wings', 'primary-wing', alice), { status: 400 });
+
+  await engine.update('staff', 'b', { department: 'Primary Wing' }, alice);
+  await engine.update('teaching-wings', 'sports', { isActive: false }, alice);
+  await engine.purge('teaching-wings', 'sports', alice);
+});
+
+test('wing names are unique', async () => {
+  const { engine } = await konarkWings();
+  await assert.rejects(engine.create('teaching-wings', { name: 'sports' }, alice), {
+    status: 400,
+    message: 'There is already "Sports" in Teaching Wings.',
+  });
+  await assert.rejects(engine.update('teaching-wings', 'sports', { name: 'Old Wing' }, alice), { status: 400 });
+});

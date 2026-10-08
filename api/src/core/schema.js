@@ -19,6 +19,9 @@
  *                   same key draws its options from it, and a new value typed
  *                   into that field becomes a new category
  *   group         - sidebar heading the collection sits under
+ *   hidden        - kept off the sidebar and dashboard because an admin page
+ *                   edits it in place (e.g. the Analytics page edits the GA4
+ *                   measurement IDs); still saved and published as usual
  *   fixed         - the row set is prescribed: rows are edited, never added
  *                   or removed
  *   schedule      - records that show on the website only between two moments:
@@ -46,9 +49,20 @@
  *                   those values
  *   appearance    - "choices" on a select: big tappable choices instead of a
  *                   dropdown, for a decision that changes the rest of the form
+ *   unique        - no two records may share this field's value (any case)
+ *   optionsFromSection - { collection, field, addWhen? } on a select: its
+ *                   options are that field of another section's records, so
+ *                   staff manage the list there. The link is kept whole:
+ *                   renaming an option renames it on every record using it,
+ *                   an option still in use cannot be hidden or deleted, and a
+ *                   new value typed into a record matching addWhen ({ field,
+ *                   is: [values] }) is added to that section by itself.
  */
 
-export const displayModes = new Set(['list', 'form', 'cards']);
+/** Admin pages inside a site workspace (admin/src/App.tsx); a section cannot share their address. */
+export const reservedCollectionNames = new Set(['activity', 'leads', 'analytics']);
+
+export const displayModes =new Set(['list', 'form', 'cards']);
 
 export const fieldTypes = new Set(['text', 'textarea', 'number', 'date', 'time', 'image', 'file', 'select', 'tags', 'boolean']);
 
@@ -83,6 +97,7 @@ export function describeCollections(collections) {
     groupField: collection.groupField ?? null,
     groups: collection.groups ?? null,
     group: collection.group ?? null,
+    hidden: Boolean(collection.hidden),
     fixed: Boolean(collection.fixed),
     schedule: collection.schedule ?? null,
     templates: collection.templates ?? null,
@@ -102,6 +117,8 @@ export function assertValidCollections(siteId, collections) {
   for (const [name, collection] of Object.entries(collections)) {
     const where = `${siteId}/${name}`;
     if (!/^[a-z0-9][a-z0-9-]*$/.test(name)) problems.push(`${where}: collection names must be lowercase-kebab`);
+    // The admin serves sections at /<site>/<section>, beside these pages.
+    if (reservedCollectionNames.has(name)) problems.push(`${where}: "${name}" is an admin page address - pick another name`);
     if (!collection.label) problems.push(`${where}: missing label`);
     if (!collection.file || !collection.key) problems.push(`${where}: missing file/key`);
     if (!Array.isArray(collection.fields) || collection.fields.length === 0) {
@@ -125,6 +142,19 @@ export function assertValidCollections(siteId, collections) {
       }
       if (field.optionsFrom && field.optionsFrom !== collection.groupsFrom) {
         problems.push(`${where}.${field.name}: optionsFrom must match the collection's groupsFrom`);
+      }
+      if (field.optionsFromSection) {
+        const { collection: source, field: sourceField, addWhen } = field.optionsFromSection;
+        const target = getCollection(collections, source);
+        if (field.type !== 'select') problems.push(`${where}.${field.name}: optionsFromSection is only for select fields`);
+        if (field.optionsFrom) problems.push(`${where}.${field.name}: use optionsFrom or optionsFromSection, not both`);
+        if (!target) problems.push(`${where}.${field.name}: optionsFromSection names an unknown section "${source}"`);
+        else if (!target.fields.some((entry) => entry.name === sourceField && entry.type === 'text' && entry.unique)) {
+          problems.push(`${where}.${field.name}: optionsFromSection must point at a unique text field of "${source}"`);
+        }
+        if (addWhen && (!addWhen.field || !Array.isArray(addWhen.is) || !collection.fields.some((entry) => entry.name === addWhen.field))) {
+          problems.push(`${where}.${field.name}: optionsFromSection.addWhen needs { field, is: [...] } naming a field here`);
+        }
       }
     }
 

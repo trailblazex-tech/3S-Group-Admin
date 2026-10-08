@@ -97,16 +97,18 @@ const actionLabels = {
   event_greeting_shown: 'Greeting pop-ups shown',
   event_greeting_cta_click: 'Greeting button clicks',
   parent_feedback_submitted: 'Feedback forms sent',
+  parent_login_click: 'Parent login clicks',
 };
 
-export async function analyticsReport({ site, credentialsFor, days: rawDays }) {
+export async function analyticsReport({ site, credentialsFor, days: rawDays, refresh = false }) {
   const days = [7, 28, 90].includes(Number(rawDays)) ? Number(rawDays) : 28;
   const credentials = await credentialsFor(site);
   if (!credentials) return { configured: false, measurementHint: site.analytics ?? null };
 
   const cacheKey = `${site.id}:${days}`;
   const hit = reports.get(cacheKey);
-  if (hit && Date.now() - hit.at < cacheMs) return hit.report;
+  // A refresh still reuses a report under 30s old, so repeated clicks don't spend quota.
+  if (hit && Date.now() - hit.at < (refresh ? 30 * 1000 : cacheMs)) return hit.report;
 
   const dateRange = { startDate: `${days - 1}daysAgo`, endDate: 'today' };
   const previousRange = { startDate: `${days * 2 - 1}daysAgo`, endDate: `${days}daysAgo` };
@@ -115,13 +117,13 @@ export async function analyticsReport({ site, credentialsFor, days: rawDays }) {
   try {
     const token = await accessToken(credentials);
     const common = { token, propertyId: credentials.propertyId };
-    const totalsMetrics = ['screenPageViews', 'activeUsers', 'newUsers', 'sessions', 'engagementRate', 'averageSessionDuration'];
+    const totalsMetrics = ['screenPageViews', 'activeUsers', 'newUsers', 'sessions', 'engagedSessions', 'engagementRate', 'averageSessionDuration'];
 
     const [totals, previous, today, daily, pages, sources, devices, cities, actions] = await Promise.all([
       runReport({ ...common, dateRange, metrics: totalsMetrics }),
       runReport({ ...common, dateRange: previousRange, metrics: totalsMetrics }),
       runReport({ ...common, dateRange: { startDate: 'today', endDate: 'today' }, metrics: ['screenPageViews', 'activeUsers'] }),
-      runReport({ ...common, dateRange, dimensions: ['date'], metrics: ['screenPageViews', 'activeUsers'], orderBys: [{ dimension: { dimensionName: 'date' } }] }),
+      runReport({ ...common, dateRange, dimensions: ['date'], metrics: ['screenPageViews', 'activeUsers', 'sessions'], orderBys: [{ dimension: { dimensionName: 'date' } }] }),
       runReport({
         ...common,
         dateRange,
@@ -164,6 +166,7 @@ export async function analyticsReport({ site, credentialsFor, days: rawDays }) {
         date: isoDay(dimension(daily, row, 'date')),
         views: metric(daily, row, 'screenPageViews'),
         visitors: metric(daily, row, 'activeUsers'),
+        sessions: metric(daily, row, 'sessions'),
       })),
       pages: (pages.rows ?? []).map((row) => ({
         path: dimension(pages, row, 'pagePath') || '/',

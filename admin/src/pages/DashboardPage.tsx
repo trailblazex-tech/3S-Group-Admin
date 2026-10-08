@@ -161,12 +161,12 @@ export function DashboardPage() {
       )}
 
       <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {collections.map((collection) => {
+        {collections.filter((collection) => !collection.hidden).map((collection) => {
           const hidden = collection.total - collection.published;
           return (
             <Link
               key={collection.name}
-              to={path(`/c/${collection.name}`)}
+              to={path(`/${collection.name}`)}
               className="group rounded-xl border border-border bg-card p-4 transition-colors hover:border-accent"
             >
               <p className="flex items-center justify-between gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">

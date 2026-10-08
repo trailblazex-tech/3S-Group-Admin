@@ -11,6 +11,11 @@ export interface Me {
   isPlatformAdmin: boolean;
 }
 
+/** How the signed-in person is shown in the admin: by their role, never their name. */
+export function roleLabel(user: Me) {
+  return user.isPlatformAdmin ? 'Platform admin' : 'Website editor';
+}
+
 export interface Site {
   id: string;
   name: string;
@@ -68,6 +73,8 @@ export interface CollectionSummary {
   groups: FieldOption[] | null;
   /** Sidebar heading this section sits under. */
   group: string | null;
+  /** Off the sidebar and dashboard: an admin page edits it in place. */
+  hidden: boolean;
   /** The row set is prescribed: rows are edited, never added or removed. */
   fixed: boolean;
   schedule: ScheduleFields | null;
@@ -125,6 +132,7 @@ export interface AnalyticsTotals {
   activeUsers: number;
   newUsers: number;
   sessions: number;
+  engagedSessions: number;
   engagementRate: number;
   averageSessionDuration: number;
 }
@@ -138,7 +146,7 @@ export type AnalyticsReport =
       totals: AnalyticsTotals;
       previous: AnalyticsTotals;
       today: { views: number; visitors: number };
-      daily: { date: string; views: number; visitors: number }[];
+      daily: { date: string; views: number; visitors: number; sessions: number }[];
       pages: { path: string; title: string; views: number; visitors: number }[];
       channels: { name: string; sessions: number }[];
       devices: { name: string; visitors: number }[];
@@ -187,6 +195,9 @@ export class ApiError extends Error {
 
 /** Fired when the session is gone, so the app can return to sign-in. */
 export const sessionExpired = new EventTarget();
+
+/** Fired when a submission is read, followed up or deleted, so the menu's unread count catches up. */
+export const leadsChanged = new EventTarget();
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = await auth.idToken();
@@ -263,7 +274,7 @@ export function siteApi(siteId: string) {
     deleteSubmission: (form: string, id: string) =>
       request<{ ok: true }>(`${base}/forms/${encodeURIComponent(form)}/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
-    analytics: (days: number) => request<AnalyticsReport>(`${base}/analytics?days=${days}`),
+    analytics: (days: number, refresh = false) => request<AnalyticsReport>(`${base}/analytics?days=${days}${refresh ? '&refresh=1' : ''}`),
 
     /** Asks for a one-time grant, then uploads the file straight to storage. */
     async upload(collection: string, file: File) {

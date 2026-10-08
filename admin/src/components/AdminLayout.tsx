@@ -22,13 +22,14 @@ import {
   Phone,
   ReceiptText,
   Shield,
+  ShieldCheck,
   Sparkles,
   Trophy,
   Users,
   Video,
   X,
 } from 'lucide-react';
-import type { Me, Site } from '../lib/api';
+import { leadsChanged, roleLabel, type Me, type Site } from '../lib/api';
 import { useSite } from '../lib/site';
 import { BrandMark } from './Brand';
 import { siteLogo } from '../lib/siteLogos';
@@ -117,7 +118,7 @@ function SiteSwitcher({ sites, upcoming, current }: { sites: Site[]; upcoming: S
           {sites.map((site) => (
             <Link
               key={site.id}
-              to={`/s/${site.id}`}
+              to={`/${site.id}`}
               role="option"
               aria-selected={site.id === current.id}
               onClick={() => setOpen(false)}
@@ -170,7 +171,21 @@ export function AdminLayout({ user, sites, upcoming, onSignOut, children }: Admi
     setIsNavOpen(false);
   }, [location.pathname]);
 
-  // New feedback and enquiries since someone last went through them.
+  // New feedback and enquiries since someone last went through them: checked
+  // on every page change, when the tab comes back into view, and right after
+  // a submission is read or followed up on the Feedback & Leads page.
+  const [leadsVersion, setLeadsVersion] = useState(0);
+  useEffect(() => {
+    const bump = () => setLeadsVersion((version) => version + 1);
+    const onVisible = () => document.visibilityState === 'visible' && bump();
+    leadsChanged.addEventListener('changed', bump);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      leadsChanged.removeEventListener('changed', bump);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
+
   useEffect(() => {
     if (!site.hasForms) return;
     let alive = true;
@@ -181,7 +196,7 @@ export function AdminLayout({ user, sites, upcoming, onSignOut, children }: Admi
     return () => {
       alive = false;
     };
-  }, [api, site.hasForms, location.pathname]);
+  }, [api, site.hasForms, location.pathname, leadsVersion]);
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
     `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
@@ -193,8 +208,10 @@ export function AdminLayout({ user, sites, upcoming, onSignOut, children }: Admi
       isActive ? 'bg-[#f59f0a] text-navy-deep shadow-sm' : 'text-[#fbc04d] hover:bg-[#f59f0a]/15 hover:text-[#ffd27a]'
     }`;
 
-  const ungrouped = collections.filter((collection) => !collection.group);
-  const groups = [...new Set(collections.map((collection) => collection.group).filter(Boolean))] as string[];
+  // Hidden sections are edited on an admin page of their own (e.g. Analytics).
+  const listed = collections.filter((collection) => !collection.hidden);
+  const ungrouped = listed.filter((collection) => !collection.group);
+  const groups = [...new Set(listed.map((collection) => collection.group).filter(Boolean))] as string[];
 
   return (
     <div className="h-dvh overflow-hidden lg:grid lg:grid-cols-[272px_minmax(0,1fr)]">
@@ -253,7 +270,7 @@ export function AdminLayout({ user, sites, upcoming, onSignOut, children }: Admi
           {ungrouped.map((collection) => {
             const Icon = collectionIcons[collection.name] ?? FileText;
             return (
-              <NavLink key={collection.name} to={path(`/c/${collection.name}`)} className={linkClass}>
+              <NavLink key={collection.name} to={path(`/${collection.name}`)} className={linkClass}>
                 <Icon className="h-4 w-4 shrink-0" />
                 <span className="flex-1 truncate">{collection.label}</span>
                 <span className="text-xs font-semibold tabular-nums text-white/40">{collection.published}</span>
@@ -274,10 +291,10 @@ export function AdminLayout({ user, sites, upcoming, onSignOut, children }: Admi
                   <GroupIcon className="h-3 w-3" />
                   {group}
                 </p>
-                {collections
+                {listed
                   .filter((collection) => collection.group === group)
                   .map((collection) => (
-                    <NavLink key={collection.name} to={path(`/c/${collection.name}`)} className={isHighlighted ? highlightLinkClass : linkClass}>
+                    <NavLink key={collection.name} to={path(`/${collection.name}`)} className={isHighlighted ? highlightLinkClass : linkClass}>
                       <span className="flex-1 truncate pl-7">{collection.label}</span>
                       <span className={`text-xs font-semibold tabular-nums ${isHighlighted ? 'opacity-60' : 'text-white/40'}`}>{collection.total}</span>
                     </NavLink>
@@ -299,12 +316,12 @@ export function AdminLayout({ user, sites, upcoming, onSignOut, children }: Admi
 
         <div className="border-t border-white/10 p-3">
           <div className="flex items-center gap-3 px-2 py-2">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-bold uppercase text-white">
-              {user.name.slice(0, 2)}
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-brand-gold">
+              <ShieldCheck className="h-4 w-4" />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-white">{user.name}</p>
-              <p className="truncate text-xs text-white/50">{user.isPlatformAdmin ? 'Platform admin' : 'Editor'}</p>
+              <p className="truncate text-sm font-semibold text-white">{roleLabel(user)}</p>
+              <p className="truncate text-xs text-white/50">Signed in</p>
             </div>
             <button
               type="button"

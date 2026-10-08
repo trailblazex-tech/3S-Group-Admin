@@ -499,14 +499,27 @@ export function RecordForm({ collection, recordId, variant, templateId = null, i
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [confirm, confirmDialog] = useConfirm();
 
+  // The section's description is refetched after every save (counts in the
+  // menu), which hands this form a new `collection` object. Loading must only
+  // re-run when the record itself changes - otherwise saving one card wipes
+  // the unsaved edits in the cards beside it.
+  const latest = useRef({ fields, fromRecord, hasTemplates: Boolean(collection.templates) });
   useEffect(() => {
+    latest.current = { fields, fromRecord, hasTemplates: Boolean(collection.templates) };
+  }, [fields, fromRecord, collection.templates]);
+  const hasInitialRecord = Boolean(initialRecord);
+  const collectionName = collection.name;
+
+  useEffect(() => {
+    // A form handed its record is keyed by that record, so it never reloads.
+    if (hasInitialRecord) return;
+    const { fields, fromRecord, hasTemplates } = latest.current;
     setError('');
     setIsDirty(false);
-    if (initialRecord) return;
 
     if (isNew) {
       setValues(emptyValues(fields));
-      if (!templateId || !collection.templates) {
+      if (!templateId || !hasTemplates) {
         setIsLoading(false);
         return;
       }
@@ -536,7 +549,7 @@ export function RecordForm({ collection, recordId, variant, templateId = null, i
     let alive = true;
     setIsLoading(true);
     api
-      .get(collection.name, recordId)
+      .get(collectionName, recordId)
       .then((record) => {
         if (!alive) return;
         setValues(fromRecord(record));
@@ -547,16 +560,23 @@ export function RecordForm({ collection, recordId, variant, templateId = null, i
     return () => {
       alive = false;
     };
-  }, [api, collection, fields, recordId, isNew, templateId, site.name, initialRecord, fromRecord]);
+  }, [api, collectionName, recordId, isNew, templateId, site.name, hasInitialRecord]);
 
+  const optionsFromKeys = collection.fields
+    .map((field) => field.optionsFrom)
+    .filter(Boolean)
+    .join(',');
   useEffect(() => {
-    const keys = new Set(collection.fields.map((field) => field.optionsFrom).filter(Boolean) as string[]);
-    if (keys.size === 0) return;
+    if (!optionsFromKeys) return;
+    let alive = true;
     api
-      .list(collection.name)
-      .then((result) => setDynamicOptions(Object.fromEntries([...keys].map((key) => [key, result.groups]))))
-      .catch(() => setDynamicOptions({}));
-  }, [api, collection]);
+      .list(collectionName)
+      .then((result) => alive && setDynamicOptions(Object.fromEntries(optionsFromKeys.split(',').map((key) => [key, result.groups]))))
+      .catch(() => alive && setDynamicOptions({}));
+    return () => {
+      alive = false;
+    };
+  }, [api, collectionName, optionsFromKeys]);
 
   useEffect(() => {
     if (!isDirty) return;
@@ -753,7 +773,7 @@ export function RecordPage() {
 
   if (!collection) return <p className="text-sm text-muted-foreground">That section does not exist.</p>;
 
-  const listPath = path(`/c/${collection.name}`);
+  const listPath = path(`/${collection.name}`);
   const done = () => {
     refreshCollections();
     navigate(listPath);

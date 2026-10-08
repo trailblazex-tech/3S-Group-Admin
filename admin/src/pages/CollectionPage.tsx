@@ -165,7 +165,18 @@ export function CollectionPage() {
     setRecords(ordered);
 
     try {
-      await api.reorder(collection.name, ordered.map((record) => record.id));
+      // With a filter on, the list is only part of the section. Sending just
+      // that part would move the whole filtered group to the top of the
+      // website's order, so swap the two within the full order instead.
+      let ids = ordered.map((record) => record.id);
+      if (group) {
+        const full = (await api.list(collection.name)).records.map((record) => record.id);
+        const a = full.indexOf(list[index].id);
+        const b = full.indexOf(list[target].id);
+        if (a >= 0 && b >= 0) [full[a], full[b]] = [full[b], full[a]];
+        ids = full;
+      }
+      await api.reorder(collection.name, ids);
     } catch (problem) {
       setError(problem instanceof Error ? problem.message : 'Could not save the new order.');
       await load();
@@ -320,7 +331,7 @@ export function CollectionPage() {
             </button>
           ) : (
             <Link
-              to={path(`/c/${collection.name}/new`)}
+              to={path(`/${collection.name}/new`)}
               className="inline-flex h-10 items-center gap-2 rounded-lg bg-navy px-4 text-sm font-bold text-white transition-colors hover:bg-navy-deep"
             >
               <Plus className="h-4 w-4" />
@@ -332,8 +343,8 @@ export function CollectionPage() {
       {isChoosingTemplate && (
         <TemplatePicker
           onClose={() => setIsChoosingTemplate(false)}
-          onBlank={() => navigate(path(`/c/${collection.name}/new`))}
-          onPick={(template) => navigate(`${path(`/c/${collection.name}/new`)}?template=${encodeURIComponent(template.id)}`)}
+          onBlank={() => navigate(path(`/${collection.name}/new`))}
+          onPick={(template) => navigate(`${path(`/${collection.name}/new`)}?template=${encodeURIComponent(template.id)}`)}
         />
       )}
 
@@ -375,7 +386,7 @@ export function CollectionPage() {
         <div className="mt-4 rounded-xl border border-dashed border-border py-14 text-center">
           <p className="text-sm font-semibold text-foreground">{search ? 'No matches.' : 'Nothing here yet.'}</p>
           {!search && !collection.fixed && (
-            <Link to={path(`/c/${collection.name}/new`)} className="mt-2 inline-block text-sm font-semibold text-muted-foreground underline hover:text-foreground">
+            <Link to={path(`/${collection.name}/new`)} className="mt-2 inline-block text-sm font-semibold text-muted-foreground underline hover:text-foreground">
               Add the first one
             </Link>
           )}
@@ -427,7 +438,7 @@ export function CollectionPage() {
                     <p className="truncate text-xs text-muted-foreground">{derivedFrom}</p>
                   </div>
                 ) : (
-                  <Link to={path(`/c/${collection.name}/${encodeURIComponent(record.id)}`)} className="min-w-0 flex-1">
+                  <Link to={path(`/${collection.name}/${encodeURIComponent(record.id)}`)} className="min-w-0 flex-1">
                     <p className={`truncate text-sm font-semibold ${record.isActive === false ? 'text-muted-foreground' : 'text-foreground'}`}>{title}</p>
                     {subtitle && <p className="truncate text-xs text-muted-foreground">{subtitle}</p>}
                   </Link>

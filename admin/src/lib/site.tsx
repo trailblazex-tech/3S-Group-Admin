@@ -6,7 +6,7 @@ export interface SiteContextValue {
   api: SiteApi;
   collections: CollectionSummary[];
   refreshCollections: () => void;
-  /** Builds a link inside the current site: path('/c/gallery') -> /s/konark/c/gallery */
+  /** Builds a link inside the current site: path('/gallery') -> /konark/gallery */
   path: (to: string) => string;
   /** Resolves a stored media value for preview: relative paths live on the site's public domain. */
   media: (src: string | null | undefined) => string;

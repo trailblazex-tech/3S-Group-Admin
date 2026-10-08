@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { BrowserRouter, Link, Navigate, Route, Routes, useParams } from 'react-router-dom';
-import { ArrowUpRight, Loader2, LogOut } from 'lucide-react';
-import { ApiError, me, sessionExpired, siteApi, type CollectionSummary, type Me, type Site } from './lib/api';
+import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
+import { ArrowUpRight, Loader2, LogOut, ShieldCheck } from 'lucide-react';
+import { ApiError, me, roleLabel, sessionExpired, siteApi, type CollectionSummary, type Me, type Site } from './lib/api';
 import { BrandLockup, BrandMark } from './components/Brand';
 import { hasOwnLogo, siteLogo } from './lib/siteLogos';
 import { auth } from './lib/auth';
@@ -97,7 +97,7 @@ function SiteTile({ site, upcoming = false }: { site: Site; upcoming?: boolean }
     );
   }
   return (
-    <Link to={`/s/${site.id}`} style={style} className={`${shell} shadow-sm transition duration-200 hover:-translate-y-1 hover:border-[hsl(var(--tile-accent))] hover:shadow-xl`}>
+    <Link to={`/${site.id}`} style={style} className={`${shell} shadow-sm transition duration-200 hover:-translate-y-1 hover:border-[hsl(var(--tile-accent))] hover:shadow-xl`}>
       {body}
     </Link>
   );
@@ -115,9 +115,9 @@ function SitePicker({ user, sites, upcoming, onSignOut }: { user: Me; sites: Sit
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-5 sm:px-8">
           <BrandLockup />
           <div className="flex items-center gap-3">
-            <span className="hidden text-right sm:block">
-              <span className="block text-sm font-semibold text-white">{user.name}</span>
-              <span className="block text-xs text-white/55">{user.email}</span>
+            <span className="hidden items-center gap-2 text-sm font-semibold text-white/85 sm:inline-flex">
+              <ShieldCheck className="h-4 w-4 text-brand-gold" />
+              {roleLabel(user)}
             </span>
             <button
               type="button"
@@ -130,7 +130,7 @@ function SitePicker({ user, sites, upcoming, onSignOut }: { user: Me; sites: Sit
           </div>
         </div>
         <div className="mx-auto max-w-6xl px-5 pb-20 pt-8 sm:px-8 sm:pt-12">
-          <p className="text-xs font-bold uppercase tracking-[0.22em] text-gold-light/80">Namaste, {user.name.split(' ')[0]}</p>
+          <p className="text-xs font-bold uppercase tracking-[0.22em] text-gold-light/80">Namaste</p>
           <h1 className="mt-2 font-display text-3xl font-semibold text-white sm:text-5xl">
             Which website are you <span className="text-brand-gold">working on?</span>
           </h1>
@@ -158,9 +158,16 @@ function SitePicker({ user, sites, upcoming, onSignOut }: { user: Me; sites: Sit
   );
 }
 
+/** Links saved before the tidy URLs (/s/konark/c/gallery) land on today's address (/konark/gallery). */
+function LegacyRedirect() {
+  const { '*': rest = '' } = useParams();
+  const { search } = useLocation();
+  return <Navigate to={`/${rest.replace(/^([^/]+)\/c\//, '$1/')}${search}`} replace />;
+}
+
 function Home({ user, sites, upcoming, onSignOut }: { user: Me; sites: Site[]; upcoming: Site[]; onSignOut: () => void }) {
   // Someone who edits a single website goes straight to it.
-  if (sites.length === 1 && upcoming.length === 0) return <Navigate to={`/s/${sites[0].id}`} replace />;
+  if (sites.length === 1 && upcoming.length === 0) return <Navigate to={`/${sites[0].id}`} replace />;
   return <SitePicker user={user} sites={sites} upcoming={upcoming} onSignOut={onSignOut} />;
 }
 
@@ -198,7 +205,7 @@ function SiteWorkspace({ user, sites, upcoming, onSignOut }: { user: Me; sites: 
             api,
             collections,
             refreshCollections,
-            path: (to: string) => `/s/${site.id}${to === '/' ? '' : to}`,
+            path: (to: string) => `/${site.id}${to === '/' ? '' : to}`,
             media: (src) => mediaUrl(site.publicUrl, src),
           }
         : null,
@@ -223,8 +230,8 @@ function SiteWorkspace({ user, sites, upcoming, onSignOut }: { user: Me; sites: 
       <AdminLayout user={user} sites={sites} upcoming={upcoming} onSignOut={onSignOut}>
         <Routes>
           <Route index element={<DashboardPage />} />
-          <Route path="c/:name" element={<CollectionPage />} />
-          <Route path="c/:name/:id" element={<RecordPage />} />
+          <Route path=":name" element={<CollectionPage />} />
+          <Route path=":name/:id" element={<RecordPage />} />
           <Route path="activity" element={<ActivityPage />} />
           <Route path="leads" element={<LeadsPage />} />
           <Route path="analytics" element={<AnalyticsPage />} />
@@ -301,7 +308,8 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Home user={session.user} sites={session.sites} upcoming={session.upcoming} onSignOut={signOut} />} />
-        <Route path="/s/:siteId/*" element={<SiteWorkspace user={session.user} sites={session.sites} upcoming={session.upcoming} onSignOut={signOut} />} />
+        <Route path="/s/*" element={<LegacyRedirect />} />
+        <Route path="/:siteId/*" element={<SiteWorkspace user={session.user} sites={session.sites} upcoming={session.upcoming} onSignOut={signOut} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

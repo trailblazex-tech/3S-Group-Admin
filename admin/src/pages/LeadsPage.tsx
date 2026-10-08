@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Download, Inbox, Loader2, Mail, MessageCircle, Phone, RefreshCw, Search, Star, Trash2, X } from 'lucide-react';
-import type { FormFieldDefinition, FormSummary, Submission } from '../lib/api';
+import { leadsChanged, type FormFieldDefinition, type FormSummary, type Submission } from '../lib/api';
 import { useSite } from '../lib/site';
 import { relativeTime } from '../lib/time';
 import { useConfirm } from '../components/ConfirmDialog';
@@ -359,7 +359,16 @@ export function LeadsPage() {
   const formName = params.get('form') ?? forms?.[0]?.name ?? '';
   const form = forms?.find((entry) => entry.name === formName) ?? forms?.[0] ?? null;
 
-  const loadForms = useCallback(() => api.forms().then(setForms), [api]);
+  const loadForms = useCallback(
+    () =>
+      api.forms().then((next) => {
+        setForms(next);
+        // No forms means no rows to load - don't sit on the skeleton.
+        if (next.length === 0) setIsLoading(false);
+        leadsChanged.dispatchEvent(new Event('changed'));
+      }),
+    [api],
+  );
 
   const loadRows = useCallback(async () => {
     if (!form) return;
