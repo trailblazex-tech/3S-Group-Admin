@@ -3,7 +3,7 @@ import type { FormEvent, ReactNode } from 'react';
 import {
   ArrowDownRight,
   ArrowUpRight,
-  CheckCircle2,
+  CalendarDays,
   Clock3,
   Download,
   ExternalLink,
@@ -11,6 +11,7 @@ import {
   FileInput,
   FileCheck2,
   Globe2,
+  LineChart,
   Loader2,
   LogIn,
   MapPin,
@@ -20,28 +21,20 @@ import {
   MousePointerClick,
   PartyPopper,
   Phone,
-  Plus,
   RefreshCw,
-  Settings2,
   Smartphone,
   Sparkles,
   Tablet,
   UserPlus,
   Users,
-  X,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import type { AdminRecord, AnalyticsReport, AnalyticsTotals } from '../lib/api';
+import type { AnalyticsReport, AnalyticsTotals } from '../lib/api';
 import { useSite } from '../lib/site';
 
 type Report = Extract<AnalyticsReport, { configured: true }>;
-type Day = Report['daily'][number];
-
-const ranges = [
-  { days: 7, label: '7 days' },
-  { days: 28, label: '28 days' },
-  { days: 90, label: '90 days' },
-];
+type Point = Report['daily'][number];
+type Granularity = Report['granularity'];
 
 /**
  * Chart colours. One measure is one hue (slot 1); the device split is the
@@ -58,15 +51,68 @@ function duration(seconds: number) {
   return minutes > 0 ? `${minutes}m ${Math.round(seconds % 60)}s` : `${Math.round(seconds)}s`;
 }
 
+// ---------------------------------------------------------------------------
+// Dates: the school's day is India's day
+// ---------------------------------------------------------------------------
+
+function indiaToday() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+}
+
+function shiftDay(iso: string, days: number) {
+  const date = new Date(`${iso}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
 function shortDay(iso: string) {
-  return new Date(`${iso}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  return new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 }
 
 function longDay(iso: string) {
-  return new Date(`${iso}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+  return new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-/** A tidy top for a chart with four gridline steps, so every gridline lands on a round value. */
+function hourLabel(hour: number) {
+  const suffix = hour < 12 ? 'AM' : 'PM';
+  return `${hour % 12 || 12} ${suffix}`;
+}
+
+/** A chart point's label: "8 Oct" for days, "3 PM" (or "8 Oct, 3 PM" in full) for hours. */
+function pointLabel(point: string, granularity: Granularity, full = false) {
+  if (granularity === 'day') return full ? longDay(point) : shortDay(point);
+  const hour = hourLabel(Number(point.slice(11, 13)));
+  return full ? `${shortDay(point)}, ${hour}` : hour;
+}
+
+type PresetKey = 'today' | 'yesterday' | '7' | '28' | '90';
+type Period = { key: PresetKey | 'custom'; start: string; end: string };
+
+const presets: { key: PresetKey; label: string; range: (today: string) => [string, string] }[] = [
+  { key: 'today', label: 'Today', range: (today) => [today, today] },
+  { key: 'yesterday', label: 'Yesterday', range: (today) => [shiftDay(today, -1), shiftDay(today, -1)] },
+  { key: '7', label: '7 days', range: (today) => [shiftDay(today, -6), today] },
+  { key: '28', label: '28 days', range: (today) => [shiftDay(today, -27), today] },
+  { key: '90', label: '90 days', range: (today) => [shiftDay(today, -89), today] },
+];
+
+function presetPeriod(key: PresetKey): Period {
+  const [start, end] = presets.find((preset) => preset.key === key)!.range(indiaToday());
+  return { key, start, end };
+}
+
+function periodLabel(period: { start: string; end: string }) {
+  if (period.start === period.end) return longDay(period.start);
+  return `${shortDay(period.start)} - ${shortDay(period.end)}`;
+}
+
+/** What the "vs previous" figures compare against, in words. */
+function previousLabel(days: number) {
+  if (days === 1) return 'vs the day before';
+  return `vs the ${days} days before`;
+}
+
+/** Rounds up to a tidy top with four gridline steps, so every gridline lands on a round value. */
 function niceMax(value: number) {
   if (value <= 4) return 4;
   const quarter = value / 4;
@@ -90,6 +136,33 @@ function useWidth<T extends HTMLElement>() {
 }
 
 // ---------------------------------------------------------------------------
+// Plain words for Google's traffic-source names
+// ---------------------------------------------------------------------------
+
+const channelWords: Record<string, { label: string; hint: string }> = {
+  'Organic Search': { label: 'Google & other search', hint: 'Searched on Google, Bing and the like, then clicked the website' },
+  Direct: { label: 'Typed the address', hint: 'Typed the website address, used a bookmark, or opened a link from WhatsApp or an app' },
+  'Organic Social': { label: 'Social media', hint: 'Came from a Facebook, Instagram or YouTube post' },
+  Referral: { label: 'Links on other websites', hint: 'Clicked a link to the school on another website' },
+  'Paid Search': { label: 'Google ads (search)', hint: 'Clicked a paid ad on Google search' },
+  'Paid Social': { label: 'Social media ads', hint: 'Clicked a paid ad on Facebook or Instagram' },
+  'Cross-network': { label: 'Google ads (all networks)', hint: 'Clicked a Google ad shown across search, YouTube and other sites' },
+  Display: { label: 'Banner ads', hint: 'Clicked a picture ad on another website' },
+  'Paid Video': { label: 'Video ads', hint: 'Clicked a paid video ad' },
+  'Organic Video': { label: 'YouTube & videos', hint: 'Came from a YouTube or other video page' },
+  Email: { label: 'Email', hint: 'Clicked a link in an email' },
+  SMS: { label: 'SMS', hint: 'Clicked a link in a text message' },
+  'Mobile Push Notifications': { label: 'Phone notifications', hint: 'Tapped a phone notification' },
+  'Organic Shopping': { label: 'Google Shopping', hint: 'Came from a shopping listing' },
+  'Paid Shopping': { label: 'Shopping ads', hint: 'Clicked a shopping ad' },
+  Affiliates: { label: 'Partner websites', hint: 'Came through a partner website' },
+  Audio: { label: 'Audio ads', hint: 'Came from an audio ad' },
+  Unassigned: { label: 'Not known', hint: "Google couldn't tell where these visits came from" },
+};
+
+const channelWord = (name: string) => channelWords[name] ?? { label: name, hint: name };
+
+// ---------------------------------------------------------------------------
 // Building blocks
 // ---------------------------------------------------------------------------
 
@@ -108,23 +181,42 @@ function Panel({ title, subtitle, action, children, className = '' }: { title: s
   );
 }
 
-/** Change against the previous period of the same length; nothing to compare with shows nothing. */
-function Change({ now, before }: { now: number; before: number }) {
-  if (!before) return <span className="text-xs text-muted-foreground">No earlier data</span>;
+function Segmented<T extends string>({ label, options, value, onChange }: { label: string; options: { key: T; label: string }[]; value: T; onChange: (key: T) => void }) {
+  return (
+    <div role="tablist" aria-label={label} className="inline-flex flex-wrap rounded-lg border border-border bg-background p-0.5">
+      {options.map((option) => (
+        <button
+          key={option.key}
+          type="button"
+          role="tab"
+          aria-selected={value === option.key}
+          onClick={() => onChange(option.key)}
+          className={`rounded-md px-3 py-1 text-xs font-semibold transition-colors ${value === option.key ? 'bg-navy text-white' : 'text-muted-foreground hover:text-foreground'}`}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Change against the previous period of the same length; nothing to compare with says so. */
+function Change({ now, before, days }: { now: number; before: number; days: number }) {
+  if (!before) return <span className="text-xs text-muted-foreground">No earlier data to compare</span>;
   const change = ((now - before) / before) * 100;
   if (Math.abs(change) < 0.5) return <span className="text-xs font-medium text-muted-foreground">Same as before</span>;
   const up = change > 0;
   const Icon = up ? ArrowUpRight : ArrowDownRight;
   return (
-    <span className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-semibold ${up ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'}`}>
+    <span className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-semibold ${up ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'}`} title={previousLabel(days)}>
       <Icon className="h-3.5 w-3.5" />
       {Math.abs(change).toFixed(0)}%
-      <span className="font-medium opacity-80">vs previous</span>
+      <span className="font-medium opacity-80">{previousLabel(days)}</span>
     </span>
   );
 }
 
-function Kpi({ icon: Icon, label, field, totals, previous, format = number, hint }: { icon: LucideIcon; label: string; field: keyof AnalyticsTotals; totals: AnalyticsTotals; previous: AnalyticsTotals; format?: (value: number) => string; hint: string }) {
+function Kpi({ icon: Icon, label, field, report, format = number, hint }: { icon: LucideIcon; label: string; field: keyof AnalyticsTotals; report: Report; format?: (value: number) => string; hint: string }) {
   return (
     <div className="rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5" title={hint}>
       <div className="flex items-center justify-between gap-2">
@@ -133,16 +225,17 @@ function Kpi({ icon: Icon, label, field, totals, previous, format = number, hint
           <Icon className="h-4 w-4" />
         </span>
       </div>
-      <p className="mt-2 text-[28px] font-bold leading-none tabular-nums text-foreground">{format(totals[field])}</p>
-      <div className="mt-3 min-h-5">
-        <Change now={totals[field]} before={previous[field]} />
+      <p className="mt-2 text-[28px] font-bold leading-none tabular-nums text-foreground">{format(report.totals[field])}</p>
+      <p className="mt-1 text-[11px] leading-4 text-muted-foreground">{hint}</p>
+      <div className="mt-2.5 min-h-5">
+        <Change now={report.totals[field]} before={report.previous[field]} days={report.range.days} />
       </div>
     </div>
   );
 }
 
 /** A ranked list with a bar behind each value - the job is comparing magnitudes. */
-function RankedBars({ rows, empty, total }: { rows: { key: string; label: ReactNode; value: number; title?: string }[]; empty: string; total?: number }) {
+function RankedBars({ rows, empty, total }: { rows: { key: string; label: ReactNode; value: number; title?: string; note?: string }[]; empty: string; total?: number }) {
   if (rows.length === 0) return <p className="py-8 text-center text-sm text-muted-foreground">{empty}</p>;
   const max = Math.max(...rows.map((row) => row.value), 1);
   return (
@@ -159,6 +252,7 @@ function RankedBars({ rows, empty, total }: { rows: { key: string; label: ReactN
           <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted">
             <div className="h-full rounded-full" style={{ width: `${Math.max((row.value / max) * 100, row.value ? 1.5 : 0)}%`, backgroundColor: series.primary }} />
           </div>
+          {row.note && <p className="mt-1 text-[11px] text-muted-foreground">{row.note}</p>}
         </li>
       ))}
     </ul>
@@ -176,29 +270,29 @@ const trendMeasures = [
 ] as const;
 type TrendKey = (typeof trendMeasures)[number]['key'];
 
-function TrendChart({ daily, measure }: { daily: Day[]; measure: TrendKey }) {
+function TrendChart({ points, measure, granularity }: { points: Point[]; measure: TrendKey; granularity: Granularity }) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const [active, setActive] = useState<number | null>(null);
   const height = 240;
   const pad = { top: 12, right: 8, bottom: 28, left: 40 };
 
-  if (daily.length === 0) return <p className="py-16 text-center text-sm text-muted-foreground">No visits in this period yet.</p>;
+  if (points.length === 0) return <p className="py-16 text-center text-sm text-muted-foreground">No visits in this period yet.</p>;
 
   const plotW = Math.max(width - pad.left - pad.right, 1);
   const plotH = height - pad.top - pad.bottom;
-  const top = niceMax(Math.max(...daily.map((day) => day[measure]), 1));
-  const x = (index: number) => pad.left + (daily.length === 1 ? plotW / 2 : (index / (daily.length - 1)) * plotW);
+  const top = niceMax(Math.max(...points.map((point) => point[measure]), 1));
+  const x = (index: number) => pad.left + (points.length === 1 ? plotW / 2 : (index / (points.length - 1)) * plotW);
   const y = (value: number) => pad.top + plotH - (value / top) * plotH;
-  const line = daily.map((day, index) => `${index ? 'L' : 'M'}${x(index).toFixed(1)},${y(day[measure]).toFixed(1)}`).join(' ');
-  const area = `${line} L${x(daily.length - 1).toFixed(1)},${pad.top + plotH} L${x(0).toFixed(1)},${pad.top + plotH} Z`;
+  const line = points.map((point, index) => `${index ? 'L' : 'M'}${x(index).toFixed(1)},${y(point[measure]).toFixed(1)}`).join(' ');
+  const area = `${line} L${x(points.length - 1).toFixed(1)},${pad.top + plotH} L${x(0).toFixed(1)},${pad.top + plotH} Z`;
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((fraction) => top * fraction);
-  const labelEvery = Math.max(1, Math.ceil(daily.length / Math.max(2, Math.floor(plotW / 72))));
-  const point = active === null ? null : daily[active];
+  const labelEvery = Math.max(1, Math.ceil(points.length / Math.max(2, Math.floor(plotW / 72))));
+  const point = active === null ? null : points[active];
 
   const pick = (clientX: number, element: Element) => {
     const box = element.getBoundingClientRect();
     const ratio = (clientX - box.left - pad.left) / plotW;
-    setActive(Math.min(daily.length - 1, Math.max(0, Math.round(ratio * (daily.length - 1)))));
+    setActive(Math.min(points.length - 1, Math.max(0, Math.round(ratio * (points.length - 1)))));
   };
 
   return (
@@ -208,7 +302,7 @@ function TrendChart({ daily, measure }: { daily: Day[]; measure: TrendKey }) {
           width={width}
           height={height}
           role="img"
-          aria-label={`${trendMeasures.find((entry) => entry.key === measure)!.label} per day`}
+          aria-label={`${trendMeasures.find((entry) => entry.key === measure)!.label} per ${granularity}`}
           onMouseMove={(event) => pick(event.clientX, event.currentTarget)}
           onTouchStart={(event) => pick(event.touches[0].clientX, event.currentTarget)}
           onTouchMove={(event) => pick(event.touches[0].clientX, event.currentTarget)}
@@ -228,21 +322,23 @@ function TrendChart({ daily, measure }: { daily: Day[]; measure: TrendKey }) {
               </text>
             </g>
           ))}
-          {daily.map((day, index) =>
+          {points.map((entry, index) =>
             index % labelEvery === 0 ? (
               <text
-                key={day.date}
+                key={entry.date}
                 x={x(index)}
                 y={height - 8}
                 textAnchor={index === 0 ? 'start' : x(index) > pad.left + plotW - 28 ? 'end' : 'middle'}
                 className="fill-muted-foreground text-[10px]"
               >
-                {shortDay(day.date)}
+                {pointLabel(entry.date, granularity)}
               </text>
             ) : null,
           )}
           <path d={area} fill="url(#trend-fill)" />
           <path d={line} fill="none" stroke={series.primary} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+          {points.length <= 48 &&
+            points.map((entry, index) => <circle key={entry.date} cx={x(index)} cy={y(entry[measure])} r={2.5} fill={series.primary} />)}
           {point && (
             <>
               <line x1={x(active!)} x2={x(active!)} y1={pad.top} y2={pad.top + plotH} stroke="hsl(var(--foreground) / 0.35)" strokeWidth={1} />
@@ -253,10 +349,10 @@ function TrendChart({ daily, measure }: { daily: Day[]; measure: TrendKey }) {
       )}
       {point && (
         <div
-          className="pointer-events-none absolute top-0 z-10 w-44 rounded-xl border border-border bg-card px-3 py-2.5 text-xs shadow-lg"
-          style={{ left: Math.min(Math.max(x(active!) - 88, 0), Math.max(width - 176, 0)) }}
+          className="pointer-events-none absolute top-0 z-10 w-48 rounded-xl border border-border bg-card px-3 py-2.5 text-xs shadow-lg"
+          style={{ left: Math.min(Math.max(x(active!) - 96, 0), Math.max(width - 192, 0)) }}
         >
-          <p className="font-semibold text-foreground">{longDay(point.date)}</p>
+          <p className="font-semibold text-foreground">{pointLabel(point.date, granularity, true)}</p>
           <dl className="mt-1.5 space-y-1">
             {trendMeasures.map((entry) => (
               <div key={entry.key} className="flex justify-between gap-3">
@@ -271,52 +367,46 @@ function TrendChart({ daily, measure }: { daily: Day[]; measure: TrendKey }) {
   );
 }
 
-function TrendPanel({ daily }: { daily: Day[] }) {
+function TrendPanel({ report }: { report: Report }) {
   const [measure, setMeasure] = useState<TrendKey>('views');
   const [showTable, setShowTable] = useState(false);
-  const total = daily.reduce((sum, day) => sum + day[measure], 0);
-  const best = daily.reduce<Day | null>((top, day) => (!top || day[measure] > top[measure] ? day : top), null);
+  const points = report.daily;
+  const granularity = report.granularity;
+  const total = points.reduce((sum, point) => sum + point[measure], 0);
+  const best = points.reduce<Point | null>((top, point) => (!top || point[measure] > top[measure] ? point : top), null);
   const label = trendMeasures.find((entry) => entry.key === measure)!.label;
+  const unit = granularity === 'hour' ? 'hour' : 'day';
 
   return (
     <Panel
       title="Traffic over time"
-      subtitle="Hover or tap a day for its numbers."
-      action={
-        <div role="tablist" aria-label="Measure" className="inline-flex rounded-lg border border-border bg-background p-0.5">
-          {trendMeasures.map((entry) => (
-            <button
-              key={entry.key}
-              type="button"
-              role="tab"
-              aria-selected={measure === entry.key}
-              onClick={() => setMeasure(entry.key)}
-              className={`rounded-md px-3 py-1 text-xs font-semibold transition-colors ${measure === entry.key ? 'bg-navy text-white' : 'text-muted-foreground hover:text-foreground'}`}
-            >
-              {entry.label}
-            </button>
-          ))}
-        </div>
-      }
+      subtitle={`${granularity === 'hour' ? 'Hour by hour' : 'Day by day'}. Hover or tap the chart for the numbers.`}
+      action={<Segmented label="Measure" options={trendMeasures.map((entry) => ({ key: entry.key, label: entry.label }))} value={measure} onChange={setMeasure} />}
     >
-      <div className="mb-4 flex flex-wrap gap-x-8 gap-y-2 text-sm">
-        <p>
-          <span className="text-muted-foreground">Total {label.toLowerCase()}</span>{' '}
-          <span className="font-bold tabular-nums text-foreground">{number(total)}</span>
-        </p>
-        <p>
-          <span className="text-muted-foreground">Daily average</span>{' '}
-          <span className="font-bold tabular-nums text-foreground">{number(daily.length ? total / daily.length : 0)}</span>
-        </p>
-        {best && best[measure] > 0 && (
-          <p>
-            <span className="text-muted-foreground">Busiest day</span>{' '}
-            <span className="font-bold text-foreground">{shortDay(best.date)}</span>{' '}
-            <span className="tabular-nums text-muted-foreground">({number(best[measure])})</span>
+      <div className="mb-4 grid gap-3 sm:grid-cols-3">
+        <div className="rounded-xl bg-muted/50 px-4 py-3">
+          <p className="text-xs text-muted-foreground">Total {label.toLowerCase()}</p>
+          <p className="mt-0.5 text-xl font-bold tabular-nums text-foreground">{number(total)}</p>
+        </div>
+        <div className="rounded-xl bg-muted/50 px-4 py-3">
+          <p className="text-xs text-muted-foreground">Average per {unit}</p>
+          <p className="mt-0.5 text-xl font-bold tabular-nums text-foreground">{number(points.length ? total / points.length : 0)}</p>
+        </div>
+        <div className="rounded-xl bg-muted/50 px-4 py-3">
+          <p className="text-xs text-muted-foreground">Busiest {unit}</p>
+          <p className="mt-0.5 text-xl font-bold text-foreground">
+            {best && best[measure] > 0 ? (
+              <>
+                {pointLabel(best.date, granularity, granularity === 'hour' && report.range.days > 1)}{' '}
+                <span className="text-sm font-semibold tabular-nums text-muted-foreground">({number(best[measure])})</span>
+              </>
+            ) : (
+              '-'
+            )}
           </p>
-        )}
+        </div>
       </div>
-      <TrendChart daily={daily} measure={measure} />
+      <TrendChart points={points} measure={measure} granularity={granularity} />
       <button type="button" onClick={() => setShowTable((open) => !open)} className="mt-3 text-xs font-semibold text-muted-foreground underline hover:text-foreground">
         {showTable ? 'Hide the numbers' : 'Show as a table'}
       </button>
@@ -325,7 +415,7 @@ function TrendPanel({ daily }: { daily: Day[] }) {
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-muted text-left text-xs text-muted-foreground">
               <tr>
-                <th className="px-3 py-2 font-semibold">Day</th>
+                <th className="px-3 py-2 font-semibold">{granularity === 'hour' ? 'Hour' : 'Day'}</th>
                 {trendMeasures.map((entry) => (
                   <th key={entry.key} className="px-3 py-2 text-right font-semibold">
                     {entry.label}
@@ -334,12 +424,12 @@ function TrendPanel({ daily }: { daily: Day[] }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {[...daily].reverse().map((day) => (
-                <tr key={day.date}>
-                  <td className="px-3 py-1.5 text-foreground">{longDay(day.date)}</td>
+              {[...points].reverse().map((point) => (
+                <tr key={point.date}>
+                  <td className="px-3 py-1.5 text-foreground">{pointLabel(point.date, granularity, true)}</td>
                   {trendMeasures.map((entry) => (
                     <td key={entry.key} className="px-3 py-1.5 text-right tabular-nums text-foreground">
-                      {number(day[entry.key])}
+                      {number(point[entry.key])}
                     </td>
                   ))}
                 </tr>
@@ -359,17 +449,28 @@ function TrendPanel({ daily }: { daily: Day[] }) {
 function Journey({ report }: { report: Report }) {
   const count = (name: string) => report.actions.find((action) => action.name === name)?.count ?? 0;
   const visits = report.totals.sessions;
+  const reachedOut = count('whatsapp_click') + count('phone_click') + count('registration_click');
   const steps = [
     { label: 'Visits', detail: 'Times someone opened the website', value: visits, icon: Globe2 },
     { label: 'Engaged visits', detail: 'Stayed 10s+, saw 2+ pages, or took an action', value: report.totals.engagedSessions, icon: Eye },
     { label: 'Forms started', detail: 'Began an enquiry or registration form', value: count('form_start'), icon: FileInput },
-    { label: 'Reached out', detail: 'WhatsApp, phone call or registration click', value: count('whatsapp_click') + count('phone_click') + count('registration_click'), icon: MessageCircle },
+    { label: 'Reached out', detail: 'WhatsApp, phone call or registration click', value: reachedOut, icon: MessageCircle },
     { label: 'Enquiries sent', detail: 'Enquiry forms submitted', value: count('generate_lead'), icon: FileCheck2 },
   ];
   const max = Math.max(visits, 1);
 
   return (
-    <Panel title="Admission interest journey" subtitle="From a visit to an enquiry. Each bar is measured against all visits.">
+    <Panel
+      title="Admission interest journey"
+      subtitle="From a visit to an enquiry. Each bar is measured against all visits."
+      action={
+        visits > 0 ? (
+          <span className="rounded-full bg-brand-blue/10 px-2.5 py-1 text-xs font-semibold text-brand-blue" title="Visits that ended in WhatsApp, a call or a registration click">
+            {((reachedOut / visits) * 100).toFixed(1)}% reached out
+          </span>
+        ) : null
+      }
+    >
       <ol className="space-y-3.5">
         {steps.map((step, index) => {
           const Icon = step.icon;
@@ -404,10 +505,45 @@ function Journey({ report }: { report: Report }) {
 }
 
 // ---------------------------------------------------------------------------
+// Where visitors are: city, state or country, without Google's "(not set)"
+// ---------------------------------------------------------------------------
+
+const placeLevels = [
+  { key: 'city', label: 'City', noun: 'city' },
+  { key: 'region', label: 'State', noun: 'state' },
+  { key: 'country', label: 'Country', noun: 'country' },
+] as const;
+type PlaceLevel = (typeof placeLevels)[number]['key'];
+
+function Places({ places }: { places: Report['places'] }) {
+  // Start on the most detailed level Google could actually fill in.
+  const [level, setLevel] = useState<PlaceLevel>(() => placeLevels.find((entry) => places[entry.key].known.length > 0)?.key ?? 'city');
+  const current = places[level];
+  const noun = placeLevels.find((entry) => entry.key === level)!.noun;
+
+  return (
+    <Panel
+      title="Where visitors are"
+      subtitle="Top places by visitors."
+      action={<Segmented label="Place" options={placeLevels.map((entry) => ({ key: entry.key, label: entry.label }))} value={level} onChange={setLevel} />}
+    >
+      <RankedBars empty={`Google couldn't tell any visitor's ${noun} for this period - try State or Country.`} rows={current.known.map((place) => ({ key: place.name, label: place.name, value: place.visitors }))} />
+      {current.unknown > 0 && (
+        <p className="mt-4 flex items-start gap-1.5 text-xs text-muted-foreground">
+          <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          {number(current.unknown)} more {current.unknown === 1 ? 'visitor' : 'visitors'} - Google couldn't tell their {noun} (common with mobile data and privacy settings).
+        </p>
+      )}
+    </Panel>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Devices: part-to-whole of at most three, as one stacked bar with labels
 // ---------------------------------------------------------------------------
 
 const deviceIcons: Record<string, LucideIcon> = { desktop: Monitor, mobile: Smartphone, tablet: Tablet };
+const deviceNames: Record<string, string> = { desktop: 'Computer', mobile: 'Mobile', tablet: 'Tablet' };
 const deviceOrder = ['mobile', 'desktop', 'tablet'];
 
 function Devices({ devices }: { devices: Report['devices'] }) {
@@ -418,12 +554,13 @@ function Devices({ devices }: { devices: Report['devices'] }) {
   const position = (name: string) => (deviceOrder.includes(name) ? deviceOrder.indexOf(name) : deviceOrder.length);
   const sorted = [...devices].sort((a, b) => position(a.name) - position(b.name));
   const colour = (name: string) => series.devices[position(name)] ?? '#8b8f98';
+  const name = (device: string) => deviceNames[device] ?? device;
 
   return (
     <div>
-      <div className="flex h-4 gap-[2px] overflow-hidden rounded-full" role="img" aria-label={sorted.map((device) => `${device.name} ${percent(device.visitors / total)}`).join(', ')}>
+      <div className="flex h-4 gap-[2px] overflow-hidden rounded-full" role="img" aria-label={sorted.map((device) => `${name(device.name)} ${percent(device.visitors / total)}`).join(', ')}>
         {sorted.map((device) => (
-          <div key={device.name} style={{ width: `${(device.visitors / total) * 100}%`, backgroundColor: colour(device.name) }} title={`${device.name}: ${percent(device.visitors / total)}`} />
+          <div key={device.name} style={{ width: `${(device.visitors / total) * 100}%`, backgroundColor: colour(device.name) }} title={`${name(device.name)}: ${percent(device.visitors / total)}`} />
         ))}
       </div>
       <ul className="mt-5 grid gap-3 sm:grid-cols-3">
@@ -434,7 +571,7 @@ function Devices({ devices }: { devices: Report['devices'] }) {
               <div className="flex items-center gap-2 text-sm capitalize text-muted-foreground">
                 <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: colour(device.name) }} />
                 <Icon className="h-4 w-4" />
-                {device.name}
+                {name(device.name)}
               </div>
               <p className="mt-1.5 text-2xl font-bold tabular-nums text-foreground">{percent(device.visitors / total)}</p>
               <p className="text-xs tabular-nums text-muted-foreground">{number(device.visitors)} visitors</p>
@@ -485,11 +622,9 @@ function Actions({ actions }: { actions: Report['actions'] }) {
 // ---------------------------------------------------------------------------
 
 function exportCsv(report: Report, siteName: string) {
-  const first = report.daily[0]?.date ?? '';
-  const last = report.daily.at(-1)?.date ?? '';
   const rows: (string | number)[][] = [
-    [`${siteName} - Google Analytics`],
-    ['Period', `${first} to ${last}`, `${report.days} days`],
+    [`${siteName} - Website analytics`],
+    ['Period', `${report.range.start} to ${report.range.end}`, `${report.range.days} days`],
     [],
     ['Overview', 'This period', 'Previous period'],
     ['Visitors', report.totals.activeUsers, report.previous.activeUsers],
@@ -500,20 +635,23 @@ function exportCsv(report: Report, siteName: string) {
     ['Engagement rate', percent(report.totals.engagementRate), percent(report.previous.engagementRate)],
     ['Time per visit', duration(report.totals.averageSessionDuration), duration(report.previous.averageSessionDuration)],
     [],
-    ['Day', 'Page views', 'Visitors', 'Visits'],
-    ...report.daily.map((day) => [day.date, day.views, day.visitors, day.sessions]),
+    [report.granularity === 'hour' ? 'Hour' : 'Day', 'Page views', 'Visitors', 'Visits'],
+    ...report.daily.map((point) => [pointLabel(point.date, report.granularity, true), point.views, point.visitors, point.sessions]),
     [],
     ['Page', 'Title', 'Views', 'Visitors'],
     ...report.pages.map((page) => [page.path, page.title, page.views, page.visitors]),
     [],
     ['How they found the website', 'Visits'],
-    ...report.channels.map((channel) => [channel.name, channel.sessions]),
+    ...report.channels.map((channel) => [channelWord(channel.name).label, channel.sessions]),
     [],
-    ['City', 'Visitors'],
-    ...report.cities.map((city) => [city.name, city.visitors]),
-    [],
+    ...placeLevels.flatMap((entry) => [
+      [entry.label, 'Visitors'],
+      ...report.places[entry.key].known.map((place) => [place.name, place.visitors]),
+      ...(report.places[entry.key].unknown ? [[`(${entry.noun} not known)`, report.places[entry.key].unknown]] : []),
+      [],
+    ]),
     ['Device', 'Visitors'],
-    ...report.devices.map((device) => [device.name, device.visitors]),
+    ...report.devices.map((device) => [deviceNames[device.name] ?? device.name, device.visitors]),
     [],
     ['Action', 'Count'],
     ...report.actions.map((action) => [action.label, action.count]),
@@ -522,165 +660,77 @@ function exportCsv(report: Report, siteName: string) {
   const url = URL.createObjectURL(new Blob([String.fromCharCode(0xfeff) + csv], { type: 'text/csv;charset=utf-8' }));
   const link = document.createElement('a');
   link.href = url;
-  link.download = `analytics-${report.days}d-${last || new Date().toISOString().slice(0, 10)}.csv`;
+  link.download = `analytics-${report.range.start}-to-${report.range.end}.csv`;
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 // ---------------------------------------------------------------------------
-// Tracking setup: the GA4 measurement IDs the website sends visits to
+// Period picker: quick choices, or any two dates
 // ---------------------------------------------------------------------------
 
-const measurementIdPattern = /^G-[A-Z0-9]{4,20}$/;
+function PeriodPicker({ period, onChange }: { period: Period; onChange: (period: Period) => void }) {
+  const [isCustom, setIsCustom] = useState(period.key === 'custom');
+  const [from, setFrom] = useState(period.start);
+  const [to, setTo] = useState(period.end);
+  const today = indiaToday();
 
-function TrackingSetup({ connected }: { connected: boolean }) {
-  const { api } = useSite();
-  const [record, setRecord] = useState<AdminRecord | null>(null);
-  const [ids, setIds] = useState<string[]>([]);
-  const [draft, setDraft] = useState('');
-  const [state, setState] = useState<{ busy: 'load' | 'save' | 'publish' | null; error: string; notice: string }>({ busy: 'load', error: '', notice: '' });
-  const saved = (record?.measurementIds as string[] | null | undefined) ?? [];
-  const isDirty = ids.join(',') !== saved.join(',');
-
-  useEffect(() => {
-    let alive = true;
-    api
-      .list('site-analytics')
-      .then(({ records }) => {
-        if (!alive) return;
-        const first = records[0] ?? null;
-        setRecord(first);
-        setIds((first?.measurementIds as string[] | null | undefined) ?? []);
-        setState({ busy: null, error: '', notice: '' });
-      })
-      .catch((problem) => alive && setState({ busy: null, error: problem instanceof Error ? problem.message : 'Could not load the tracking settings.', notice: '' }));
-    return () => {
-      alive = false;
-    };
-  }, [api]);
-
-  const add = (event?: FormEvent) => {
-    event?.preventDefault();
-    const entries = draft
-      .split(/[\s,]+/)
-      .map((entry) => entry.trim().toUpperCase())
-      .filter(Boolean);
-    if (entries.length === 0) return;
-    const wrong = entries.find((entry) => !measurementIdPattern.test(entry));
-    if (wrong) {
-      setState((current) => ({ ...current, error: `"${wrong}" is not a GA4 measurement ID - they look like G-XXXXXXXXXX.`, notice: '' }));
-      return;
-    }
-    setIds((current) => [...new Set([...current, ...entries])]);
-    setDraft('');
-    setState((current) => ({ ...current, error: '', notice: '' }));
-  };
-
-  const save = async () => {
-    if (!record) return;
-    setState({ busy: 'save', error: '', notice: '' });
-    try {
-      const next = await api.update('site-analytics', record.id, { measurementIds: ids });
-      setRecord(next);
-      setIds((next.measurementIds as string[] | null | undefined) ?? []);
-      setState({ busy: null, error: '', notice: 'Saved. Publish the website to start sending visits to these IDs.' });
-    } catch (problem) {
-      setState({ busy: null, error: problem instanceof Error ? problem.message : 'Could not save.', notice: '' });
-    }
-  };
-
-  const publish = async () => {
-    setState({ busy: 'publish', error: '', notice: '' });
-    try {
-      const result = await api.publish();
-      setState({ busy: null, error: result.queued ? '' : result.message, notice: result.queued ? result.message : '' });
-    } catch (problem) {
-      setState({ busy: null, error: problem instanceof Error ? problem.message : 'Could not publish.', notice: '' });
-    }
+  const apply = (event: FormEvent) => {
+    event.preventDefault();
+    if (!from || !to) return;
+    const [start, end] = from <= to ? [from, to] : [to, from];
+    onChange({ key: 'custom', start, end });
   };
 
   return (
-    <Panel
-      title="Tracking setup"
-      subtitle="Where the website sends its visits. Changes here reach the website when you publish."
-      action={
-        <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${connected ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'}`}>
-          {connected ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Settings2 className="h-3.5 w-3.5" />}
-          {connected ? 'Reports connected' : 'Reports not connected'}
-        </span>
-      }
-    >
-      {state.busy === 'load' ? (
-        <p className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" /> Loading...
-        </p>
-      ) : !record ? (
-        <p className="text-sm text-muted-foreground">{state.error || 'Tracking is not set up for this website.'}</p>
-      ) : (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
-          <div>
-            <p className="text-sm font-semibold text-foreground">GA4 measurement IDs</p>
-            <p className="mt-0.5 text-xs leading-5 text-muted-foreground">Every visit is sent to each ID. With none, the website uses the ID built into it.</p>
-            <ul className="mt-3 flex min-h-9 flex-wrap gap-2">
-              {ids.length === 0 && <li className="text-sm italic text-muted-foreground">None - using the built-in ID</li>}
-              {ids.map((id) => (
-                <li key={id} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted/60 py-1 pl-3 pr-1.5 font-mono text-sm text-foreground">
-                  {id}
-                  <button type="button" onClick={() => setIds((current) => current.filter((entry) => entry !== id))} className="rounded p-0.5 text-muted-foreground hover:bg-border hover:text-foreground" aria-label={`Remove ${id}`}>
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </li>
-              ))}
-            </ul>
-            <form onSubmit={add} className="mt-3 flex gap-2">
-              <input
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-                placeholder="G-XXXXXXXXXX"
-                aria-label="Add a measurement ID"
-                spellCheck={false}
-                autoCapitalize="characters"
-                className="min-w-0 flex-1 rounded-lg border border-input bg-background px-3 py-2 font-mono text-sm uppercase outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
-              />
-              <button type="submit" disabled={!draft.trim()} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted disabled:opacity-50">
-                <Plus className="h-4 w-4" /> Add
-              </button>
-            </form>
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              <button type="button" onClick={save} disabled={!isDirty || state.busy !== null} className="inline-flex items-center gap-2 rounded-lg bg-navy px-4 py-2 text-sm font-semibold text-white hover:bg-navy-deep disabled:opacity-50">
-                {state.busy === 'save' && <Loader2 className="h-4 w-4 animate-spin" />}
-                Save
-              </button>
-              <button type="button" onClick={publish} disabled={isDirty || state.busy !== null} className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted disabled:opacity-50">
-                {state.busy === 'publish' && <Loader2 className="h-4 w-4 animate-spin" />}
-                Publish website
-              </button>
-              {isDirty && <span className="text-xs font-medium text-muted-foreground">Unsaved changes</span>}
-            </div>
-            {state.error && (
-              <p role="alert" className="mt-3 rounded-lg bg-destructive/10 px-3 py-2 text-sm font-semibold text-destructive">
-                {state.error}
-              </p>
-            )}
-            {state.notice && (
-              <p role="status" className="mt-3 rounded-lg bg-success/10 px-3 py-2 text-sm font-semibold text-success">
-                {state.notice}
-              </p>
-            )}
-          </div>
-          <div className="rounded-xl bg-muted/50 p-4 text-xs leading-5 text-muted-foreground">
-            <p className="font-semibold text-foreground">Where to find a measurement ID</p>
-            <p className="mt-1">In Google Analytics: Admin, then Data streams, then the website's stream. It starts with G-.</p>
-            <p className="mt-3 font-semibold text-foreground">Reports on this page</p>
-            <p className="mt-1">
-              {connected
-                ? 'This page reads the GA4 property directly, through a read-only Google service account.'
-                : 'To show reports here, a platform administrator adds the service account as a Viewer on the GA4 property, then runs npm run analytics:connect with the property ID (digits only, from Admin > Property details).'}
-            </p>
-          </div>
-        </div>
+    <div className="flex flex-col items-start gap-2 sm:items-end">
+      <div role="tablist" aria-label="Period" className="inline-flex flex-wrap rounded-lg border border-border bg-card p-1">
+        {presets.map((preset) => (
+          <button
+            key={preset.key}
+            type="button"
+            role="tab"
+            aria-selected={!isCustom && period.key === preset.key}
+            onClick={() => {
+              setIsCustom(false);
+              onChange(presetPeriod(preset.key));
+            }}
+            className={`rounded-md px-3 py-1.5 text-sm font-semibold transition-colors ${!isCustom && period.key === preset.key ? 'bg-navy text-white' : 'text-muted-foreground hover:text-foreground'}`}
+          >
+            {preset.label}
+          </button>
+        ))}
+        <button
+          type="button"
+          role="tab"
+          aria-selected={isCustom}
+          onClick={() => {
+            setIsCustom(true);
+            setFrom(period.start);
+            setTo(period.end);
+          }}
+          className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors ${isCustom ? 'bg-navy text-white' : 'text-muted-foreground hover:text-foreground'}`}
+        >
+          <CalendarDays className="h-4 w-4" />
+          Custom
+        </button>
+      </div>
+      {isCustom && (
+        <form onSubmit={apply} className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-2 text-sm">
+          <label className="flex items-center gap-1.5 text-muted-foreground">
+            From
+            <input type="date" value={from} max={today} onChange={(event) => setFrom(event.target.value)} className="rounded-md border border-input bg-background px-2 py-1 text-foreground" />
+          </label>
+          <label className="flex items-center gap-1.5 text-muted-foreground">
+            To
+            <input type="date" value={to} max={today} onChange={(event) => setTo(event.target.value)} className="rounded-md border border-input bg-background px-2 py-1 text-foreground" />
+          </label>
+          <button type="submit" disabled={!from || !to} className="rounded-md bg-navy px-3 py-1.5 text-xs font-semibold text-white hover:bg-navy-deep disabled:opacity-50">
+            Show
+          </button>
+        </form>
       )}
-    </Panel>
+    </div>
   );
 }
 
@@ -691,7 +741,7 @@ function TrackingSetup({ connected }: { connected: boolean }) {
 /** Website traffic from Google Analytics 4, for people who don't use GA itself. */
 export function AnalyticsPage() {
   const { api, site } = useSite();
-  const [days, setDays] = useState(28);
+  const [period, setPeriod] = useState<Period>(() => presetPeriod('7'));
   const [report, setReport] = useState<AnalyticsReport | null>(null);
   const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
@@ -703,7 +753,7 @@ export function AnalyticsPage() {
       if (refresh) setRefreshing(true);
       else setReport(null);
       api
-        .analytics(days, refresh)
+        .analytics({ start: period.start, end: period.end }, refresh)
         .then((next) => alive && setReport(next))
         .catch((problem) => alive && setError(problem instanceof Error ? problem.message : 'Could not load analytics.'))
         .finally(() => alive && setRefreshing(false));
@@ -711,38 +761,24 @@ export function AnalyticsPage() {
         alive = false;
       };
     },
-    [api, days],
+    [api, period.start, period.end],
   );
 
   useEffect(() => load(false), [load]);
 
   const ready = report?.configured ? report : null;
-  const first = ready?.daily[0]?.date;
-  const last = ready?.daily.at(-1)?.date;
+  const rangeKey = ready ? `${ready.range.start}:${ready.range.end}` : '';
 
   return (
     <div className="mx-auto max-w-6xl space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="font-display text-3xl font-semibold text-foreground">Analytics</h1>
           <p className="mt-1 text-sm text-muted-foreground">Who visits {site.name}, what they look at, and what they do.</p>
         </div>
         {report?.configured !== false && (
-          <div className="flex flex-wrap items-center gap-2">
-            <div role="tablist" aria-label="Period" className="inline-flex rounded-lg border border-border bg-card p-1">
-              {ranges.map((range) => (
-                <button
-                  key={range.days}
-                  type="button"
-                  role="tab"
-                  aria-selected={days === range.days}
-                  onClick={() => setDays(range.days)}
-                  className={`rounded-md px-3 py-1.5 text-sm font-semibold transition-colors ${days === range.days ? 'bg-navy text-white' : 'text-muted-foreground hover:text-foreground'}`}
-                >
-                  {range.label}
-                </button>
-              ))}
-            </div>
+          <div className="flex flex-wrap items-start gap-2">
+            <PeriodPicker period={period} onChange={setPeriod} />
             <button
               type="button"
               onClick={() => load(true)}
@@ -775,8 +811,18 @@ export function AnalyticsPage() {
 
       {!report && !error && (
         <p className="flex items-center gap-2 py-16 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" /> Loading the last {days} days from Google Analytics...
+          <Loader2 className="h-4 w-4 animate-spin" /> Loading {periodLabel(period)} from Google Analytics...
         </p>
+      )}
+
+      {report?.configured === false && (
+        <div className="rounded-2xl border border-border bg-card p-6 sm:p-8">
+          <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-blue/10 text-brand-blue">
+            <LineChart className="h-6 w-6" />
+          </span>
+          <h2 className="mt-4 font-display text-xl font-semibold text-foreground">Analytics is not switched on for this website yet</h2>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Ask the 3S Group team to connect the website's Google Analytics, and the numbers will appear here.</p>
+        </div>
       )}
 
       {ready && (
@@ -789,15 +835,14 @@ export function AnalyticsPage() {
               </span>
               Live from Google Analytics
             </span>
+            <span className="inline-flex items-center gap-1.5 font-semibold text-foreground">
+              <CalendarDays className="h-4 w-4 text-muted-foreground" />
+              {periodLabel(ready.range)}
+            </span>
             <span className="text-muted-foreground">
               Today so far: <span className="font-semibold tabular-nums text-foreground">{number(ready.today.visitors)}</span> visitors,{' '}
               <span className="font-semibold tabular-nums text-foreground">{number(ready.today.views)}</span> page views
             </span>
-            {first && last && (
-              <span className="text-muted-foreground">
-                {shortDay(first)} - {shortDay(last)}
-              </span>
-            )}
             <span className="inline-flex items-center gap-1 text-xs text-muted-foreground sm:ml-auto" title="Google can take a few hours to count the most recent visits.">
               <Clock3 className="h-3.5 w-3.5" />
               Updated {new Date(ready.generatedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
@@ -805,22 +850,25 @@ export function AnalyticsPage() {
           </div>
 
           <div className={`grid grid-cols-2 gap-3 lg:grid-cols-5 ${refreshing ? 'opacity-60' : ''}`}>
-            <Kpi icon={Users} label="Visitors" field="activeUsers" totals={ready.totals} previous={ready.previous} hint="People who visited at least once" />
-            <Kpi icon={UserPlus} label="New visitors" field="newUsers" totals={ready.totals} previous={ready.previous} hint="First-time visitors" />
-            <Kpi icon={Eye} label="Page views" field="screenPageViews" totals={ready.totals} previous={ready.previous} hint="Pages opened, counting repeats" />
-            <Kpi icon={MousePointerClick} label="Engaged visits" field="engagementRate" format={percent} totals={ready.totals} previous={ready.previous} hint="Visits that lasted 10s+, saw 2+ pages, or took an action" />
-            <Kpi icon={Clock3} label="Time per visit" field="averageSessionDuration" format={duration} totals={ready.totals} previous={ready.previous} hint="Average length of a visit" />
+            <Kpi icon={Users} label="Visitors" field="activeUsers" report={ready} hint="People who opened the website" />
+            <Kpi icon={UserPlus} label="New visitors" field="newUsers" report={ready} hint="Visiting for the first time" />
+            <Kpi icon={Eye} label="Page views" field="screenPageViews" report={ready} hint="Pages opened, counting repeats" />
+            <Kpi icon={MousePointerClick} label="Engaged visits" field="engagementRate" format={percent} report={ready} hint="Stayed 10s+, saw 2+ pages, or acted" />
+            <Kpi icon={Clock3} label="Time per visit" field="averageSessionDuration" format={duration} report={ready} hint="How long a visit lasts on average" />
           </div>
 
-          <TrendPanel key={days} daily={ready.daily} />
+          <TrendPanel key={rangeKey} report={ready} />
 
           <div className="grid gap-5 lg:grid-cols-2">
             <Journey report={ready} />
-            <Panel title="How they found the website" subtitle="Visits by where they came from.">
+            <Panel title="How they found the website" subtitle="Where visits came from.">
               <RankedBars
                 empty="No visits yet."
                 total={ready.channels.reduce((sum, channel) => sum + channel.sessions, 0)}
-                rows={ready.channels.map((channel) => ({ key: channel.name, label: channel.name, value: channel.sessions }))}
+                rows={ready.channels.map((channel) => {
+                  const words = channelWord(channel.name);
+                  return { key: channel.name, label: words.label, note: words.hint, value: channel.sessions, title: words.hint };
+                })}
               />
             </Panel>
           </div>
@@ -866,9 +914,7 @@ export function AnalyticsPage() {
             <Panel title="Devices" subtitle="What visitors used to open the website.">
               <Devices devices={ready.devices} />
             </Panel>
-            <Panel title="Where they are" subtitle="Top cities by visitors." action={<MapPin className="h-4 w-4 text-muted-foreground" />}>
-              <RankedBars empty="No visits yet." rows={ready.cities.map((city) => ({ key: city.name, label: city.name, value: city.visitors }))} />
-            </Panel>
+            <Places key={rangeKey} places={ready.places} />
           </div>
 
           <Panel title="What visitors did" subtitle="Actions that matter to the school, counted on the website.">
@@ -876,8 +922,6 @@ export function AnalyticsPage() {
           </Panel>
         </>
       )}
-
-      {(report || error) && <TrackingSetup connected={Boolean(ready)} />}
     </div>
   );
 }

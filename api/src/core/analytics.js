@@ -100,30 +100,79 @@ const actionLabels = {
   parent_login_click: 'Parent login clicks',
 };
 
-export async function analyticsReport({ site, credentialsFor, days: rawDays, refresh = false }) {
-  const days = [7, 28, 90].includes(Number(rawDays)) ? Number(rawDays) : 28;
+/** Today's date in India (the school's timezone), YYYY-MM-DD. */
+function indiaToday() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+}
+
+function shiftDay(iso, days) {
+  const date = new Date(`${iso}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function spanDays(start, end) {
+  return Math.round((Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86400000) + 1;
+}
+
+const isIsoDay = (value) => /^\d{4}-\d{2}-\d{2}$/.test(value ?? '') && !Number.isNaN(Date.parse(`${value}T00:00:00Z`));
+
+/**
+ * The period a report covers: an explicit start/end (YYYY-MM-DD, India time),
+ * or the last N days ending today. At most 400 days, never in the future.
+ */
+export function resolveRange({ start, end, days }) {
+  const today = indiaToday();
+  if (isIsoDay(start) && isIsoDay(end)) {
+    const to = end > today ? today : end;
+    const from = start > to ? to : start;
+    if (spanDays(from, to) > 400) throw new ApiError(400, 'Pick a period of 400 days or less.');
+    return { start: from, end: to };
+  }
+  const length = [1, 7, 28, 90].includes(Number(days)) ? Number(days) : 28;
+  return { start: shiftDay(today, -(length - 1)), end: today };
+}
+
+/** Google's way of saying it couldn't tell. */
+const notSet = (value) => !value || value === '(not set)' || value === '(other)';
+
+export async function analyticsReport({ site, credentialsFor, days, start, end, refresh = false }) {
+  const range = resolveRange({ start, end, days });
   const credentials = await credentialsFor(site);
   if (!credentials) return { configured: false, measurementHint: site.analytics ?? null };
 
-  const cacheKey = `${site.id}:${days}`;
+  const cacheKey = `${site.id}:${range.start}:${range.end}`;
   const hit = reports.get(cacheKey);
   // A refresh still reuses a report under 30s old, so repeated clicks don't spend quota.
   if (hit && Date.now() - hit.at < (refresh ? 30 * 1000 : cacheMs)) return hit.report;
 
-  const dateRange = { startDate: `${days - 1}daysAgo`, endDate: 'today' };
-  const previousRange = { startDate: `${days * 2 - 1}daysAgo`, endDate: `${days}daysAgo` };
+  const length = spanDays(range.start, range.end);
+  const dateRange = { startDate: range.start, endDate: range.end };
+  const previousRange = { startDate: shiftDay(range.start, -length), endDate: shiftDay(range.start, -1) };
+  // A day or two reads better hour by hour.
+  const byHour = length <= 2;
+  const timeDimension = byHour ? 'dateHour' : 'date';
 
   let report;
   try {
     const token = await accessToken(credentials);
     const common = { token, propertyId: credentials.propertyId };
     const totalsMetrics = ['screenPageViews', 'activeUsers', 'newUsers', 'sessions', 'engagedSessions', 'engagementRate', 'averageSessionDuration'];
+    const byVisitors = (name) =>
+      runReport({ ...common, dateRange, dimensions: [name], metrics: ['activeUsers'], orderBys: [{ metric: { metricName: 'activeUsers' }, desc: true }], limit: 12 });
 
-    const [totals, previous, today, daily, pages, sources, devices, cities, actions] = await Promise.all([
+    const [totals, previous, today, series, pages, sources, devices, cities, regions, countries, actions] = await Promise.all([
       runReport({ ...common, dateRange, metrics: totalsMetrics }),
       runReport({ ...common, dateRange: previousRange, metrics: totalsMetrics }),
       runReport({ ...common, dateRange: { startDate: 'today', endDate: 'today' }, metrics: ['screenPageViews', 'activeUsers'] }),
-      runReport({ ...common, dateRange, dimensions: ['date'], metrics: ['screenPageViews', 'activeUsers', 'sessions'], orderBys: [{ dimension: { dimensionName: 'date' } }] }),
+      runReport({
+        ...common,
+        dateRange,
+        dimensions: [timeDimension],
+        metrics: ['screenPageViews', 'activeUsers', 'sessions'],
+        orderBys: [{ dimension: { dimensionName: timeDimension } }],
+        limit: 1000,
+      }),
       runReport({
         ...common,
         dateRange,
@@ -138,45 +187,54 @@ export async function analyticsReport({ site, credentialsFor, days: rawDays, ref
         dimensions: ['sessionDefaultChannelGroup'],
         metrics: ['sessions'],
         orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
-        limit: 8,
+        limit: 10,
       }),
       runReport({ ...common, dateRange, dimensions: ['deviceCategory'], metrics: ['activeUsers'] }),
-      runReport({
-        ...common,
-        dateRange,
-        dimensions: ['city'],
-        metrics: ['activeUsers'],
-        orderBys: [{ metric: { metricName: 'activeUsers' }, desc: true }],
-        limit: 8,
-      }),
+      byVisitors('city'),
+      byVisitors('region'),
+      byVisitors('country'),
       runReport({ ...common, dateRange, dimensions: ['eventName'], metrics: ['eventCount'], dimensionFilter: eventFilter(Object.keys(actionLabels)) }),
     ]);
 
     const sum = (source) => Object.fromEntries(totalsMetrics.map((name) => [name, metric(source, source.rows?.[0], name)]));
     const actionCounts = new Map((actions.rows ?? []).map((row) => [dimension(actions, row, 'eventName'), metric(actions, row, 'eventCount')]));
+    // "(not set)" means Google couldn't place the visitor: count those, don't list them.
+    const places = (source, name) => {
+      const rows = (source.rows ?? []).map((row) => ({ name: dimension(source, row, name), visitors: metric(source, row, 'activeUsers') }));
+      return {
+        known: rows.filter((row) => !notSet(row.name)).slice(0, 8),
+        unknown: rows.filter((row) => notSet(row.name)).reduce((total, row) => total + row.visitors, 0),
+      };
+    };
 
     report = {
       configured: true,
-      days,
+      range: { ...range, days: length },
+      days: length,
+      granularity: byHour ? 'hour' : 'day',
       generatedAt: new Date().toISOString(),
       totals: sum(totals),
       previous: sum(previous),
       today: { views: metric(today, today.rows?.[0], 'screenPageViews'), visitors: metric(today, today.rows?.[0], 'activeUsers') },
-      daily: (daily.rows ?? []).map((row) => ({
-        date: isoDay(dimension(daily, row, 'date')),
-        views: metric(daily, row, 'screenPageViews'),
-        visitors: metric(daily, row, 'activeUsers'),
-        sessions: metric(daily, row, 'sessions'),
-      })),
+      daily: (series.rows ?? []).map((row) => {
+        const raw = dimension(series, row, timeDimension);
+        return {
+          // Hourly points read "YYYY-MM-DDTHH", daily points "YYYY-MM-DD".
+          date: byHour ? `${isoDay(raw.slice(0, 8))}T${raw.slice(8, 10)}` : isoDay(raw),
+          views: metric(series, row, 'screenPageViews'),
+          visitors: metric(series, row, 'activeUsers'),
+          sessions: metric(series, row, 'sessions'),
+        };
+      }),
       pages: (pages.rows ?? []).map((row) => ({
         path: dimension(pages, row, 'pagePath') || '/',
         title: dimension(pages, row, 'pageTitle') || '',
         views: metric(pages, row, 'screenPageViews'),
         visitors: metric(pages, row, 'activeUsers'),
       })),
-      channels: (sources.rows ?? []).map((row) => ({ name: dimension(sources, row, 'sessionDefaultChannelGroup') || 'Other', sessions: metric(sources, row, 'sessions') })),
+      channels: (sources.rows ?? []).map((row) => ({ name: dimension(sources, row, 'sessionDefaultChannelGroup') || 'Unassigned', sessions: metric(sources, row, 'sessions') })),
       devices: (devices.rows ?? []).map((row) => ({ name: dimension(devices, row, 'deviceCategory') || 'other', visitors: metric(devices, row, 'activeUsers') })),
-      cities: (cities.rows ?? []).map((row) => ({ name: dimension(cities, row, 'city') || '(not set)', visitors: metric(cities, row, 'activeUsers') })),
+      places: { city: places(cities, 'city'), region: places(regions, 'region'), country: places(countries, 'country') },
       actions: Object.entries(actionLabels).map(([name, label]) => ({ name, label, count: actionCounts.get(name) ?? 0 })),
     };
   } catch (error) {

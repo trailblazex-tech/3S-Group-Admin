@@ -141,7 +141,10 @@ export type AnalyticsReport =
   | { configured: false }
   | {
       configured: true;
+      range: { start: string; end: string; days: number };
       days: number;
+      /** hour: each point's date is "YYYY-MM-DDTHH"; day: "YYYY-MM-DD". */
+      granularity: 'hour' | 'day';
       generatedAt: string;
       totals: AnalyticsTotals;
       previous: AnalyticsTotals;
@@ -150,7 +153,7 @@ export type AnalyticsReport =
       pages: { path: string; title: string; views: number; visitors: number }[];
       channels: { name: string; sessions: number }[];
       devices: { name: string; visitors: number }[];
-      cities: { name: string; visitors: number }[];
+      places: Record<'city' | 'region' | 'country', { known: { name: string; visitors: number }[]; unknown: number }>;
       actions: { name: string; label: string; count: number }[];
     };
 
@@ -274,7 +277,8 @@ export function siteApi(siteId: string) {
     deleteSubmission: (form: string, id: string) =>
       request<{ ok: true }>(`${base}/forms/${encodeURIComponent(form)}/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
-    analytics: (days: number, refresh = false) => request<AnalyticsReport>(`${base}/analytics?days=${days}${refresh ? '&refresh=1' : ''}`),
+    analytics: (range: { start: string; end: string }, refresh = false) =>
+      request<AnalyticsReport>(`${base}/analytics?start=${range.start}&end=${range.end}${refresh ? '&refresh=1' : ''}`),
 
     /** Asks for a one-time grant, then uploads the file straight to storage. */
     async upload(collection: string, file: File) {

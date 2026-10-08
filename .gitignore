@@ -9,3 +9,5 @@ dist/
 Thumbs.db
 # Local dev store output
 .dev-data/
+
+.claude/settings.local.json

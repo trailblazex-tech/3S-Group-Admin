@@ -13,7 +13,7 @@
  *   GET  /sites/<site>/forms          the site's forms, with new/total counts
  *   GET  /sites/<site>/forms/<form>   that form's submissions, newest first
  *   PUT|DELETE /sites/<site>/forms/<form>/<id>   follow-up status / delete
- *   GET  /sites/<site>/analytics      Google Analytics summary (?days=7|28|90, &refresh=1 skips the cache)
+ *   GET  /sites/<site>/analytics      Google Analytics summary (?start=&end= YYYY-MM-DD, or ?days=1|7|28|90; &refresh=1 skips the cache)
  *   *    /sites/<site>/...            that site's content (see engine.js)
  *
  * `user` is already authenticated by the caller (API Gateway's JWT
@@ -133,7 +133,7 @@ export function createRouter({ sites, storeFor, uploader, mediaBaseUrl = '', upc
       if (rest[0] === 'forms') return handleSubmissions({ method, site, rest, query, body, actor });
 
       if (sitePath === '/analytics' && method === 'GET') {
-        return json(200, await analyticsReport({ site, credentialsFor: analyticsCredentials, days: query.days, refresh: query.refresh === '1' }), { 'Cache-Control': 'private, no-store' });
+        return json(200, await analyticsReport({ site, credentialsFor: analyticsCredentials, days: query.days, start: query.start, end: query.end, refresh: query.refresh === '1' }), { 'Cache-Control': 'private, no-store' });
       }
 
       if (sitePath === '/uploads' && method === 'POST') {
