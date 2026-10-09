@@ -103,7 +103,7 @@ function SiteTile({ site, upcoming = false }: { site: Site; upcoming?: boolean }
   );
 }
 
-function SitePicker({ user, sites, upcoming, onSignOut }: { user: Me; sites: Site[]; upcoming: Site[]; onSignOut: () => void }) {
+function SitePicker({ sites, upcoming, onSignOut }: { sites: Site[]; upcoming: Site[]; onSignOut: () => void }) {
   useEffect(() => {
     document.title = '3S Group - Website admin';
     document.documentElement.style.removeProperty('--site-accent');
@@ -117,7 +117,7 @@ function SitePicker({ user, sites, upcoming, onSignOut }: { user: Me; sites: Sit
           <div className="flex items-center gap-3">
             <span className="hidden items-center gap-2 text-sm font-semibold text-white/85 sm:inline-flex">
               <ShieldCheck className="h-4 w-4 text-brand-gold" />
-              {roleLabel(user)}
+              {roleLabel()}
             </span>
             <button
               type="button"
@@ -165,10 +165,10 @@ function LegacyRedirect() {
   return <Navigate to={`/${rest.replace(/^([^/]+)\/c\//, '$1/')}${search}`} replace />;
 }
 
-function Home({ user, sites, upcoming, onSignOut }: { user: Me; sites: Site[]; upcoming: Site[]; onSignOut: () => void }) {
+function Home({ sites, upcoming, onSignOut }: { sites: Site[]; upcoming: Site[]; onSignOut: () => void }) {
   // Someone who edits a single website goes straight to it.
   if (sites.length === 1 && upcoming.length === 0) return <Navigate to={`/${sites[0].id}`} replace />;
-  return <SitePicker user={user} sites={sites} upcoming={upcoming} onSignOut={onSignOut} />;
+  return <SitePicker sites={sites} upcoming={upcoming} onSignOut={onSignOut} />;
 }
 
 function SiteWorkspace({ user, sites, upcoming, onSignOut }: { user: Me; sites: Site[]; upcoming: Site[]; onSignOut: () => void }) {
@@ -333,7 +333,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Home user={session.user} sites={session.sites} upcoming={session.upcoming} onSignOut={signOut} />} />
+        <Route path="/" element={<Home sites={session.sites} upcoming={session.upcoming} onSignOut={signOut} />} />
         <Route path="/s/*" element={<LegacyRedirect />} />
         <Route path="/:siteId/*" element={<SiteWorkspace user={session.user} sites={session.sites} upcoming={session.upcoming} onSignOut={signOut} />} />
         <Route path="*" element={<Navigate to="/" replace />} />

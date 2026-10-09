@@ -158,7 +158,7 @@ interface AdminLayoutProps {
   children: ReactNode;
 }
 
-export function AdminLayout({ user, sites, upcoming, onSignOut, children }: AdminLayoutProps) {
+export function AdminLayout({ sites, upcoming, onSignOut, children }: AdminLayoutProps) {
   const { site, api, collections, path } = useSite();
   const [isNavOpen, setIsNavOpen] = useState(false);
   const [unreadLeads, setUnreadLeads] = useState(0);
@@ -320,7 +320,7 @@ export function AdminLayout({ user, sites, upcoming, onSignOut, children }: Admi
               <ShieldCheck className="h-4 w-4" />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-white">{roleLabel(user)}</p>
+              <p className="truncate text-sm font-semibold text-white">{roleLabel()}</p>
               <p className="truncate text-xs text-white/50">Signed in</p>
             </div>
             <button

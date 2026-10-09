@@ -11,9 +11,9 @@ export interface Me {
   isPlatformAdmin: boolean;
 }
 
-/** How the signed-in person is shown in the admin: by their role, never their name. */
-export function roleLabel(user: Me) {
-  return user.isPlatformAdmin ? 'Platform admin' : 'Admin';
+/** How the signed-in person is shown in the admin: never by name, the same for everyone. */
+export function roleLabel() {
+  return 'Admin';
 }
 
 export interface Site {
