@@ -4,10 +4,12 @@
  * in their place, all in one transaction. For handing a site to its owner
  * after testing; other sites are never touched.
  *
- *   npm run db:reset -- --site konark --from backups/reset-content --yes
+ *   npm run db:reset -- --site konark --from backups/reset-content --yes [--publish]
  *
  * Without --yes it only prints what it would do. The backup lands in
  * backups/db-backup-<site>-<time>.json first, whatever happens next.
+ * --publish then writes the site's published snapshot from the new content,
+ * as "Publish to website" does (without triggering a rebuild).
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -17,6 +19,7 @@ import { getSite } from '../api/src/sites/index.js';
 const siteId = arg('site');
 const from = arg('from');
 const confirmed = Boolean(arg('yes', false));
+const publish = Boolean(arg('publish', false));
 const tables = ['content_records', 'collection_meta', 'activity_log', 'form_submissions'];
 
 const site = getSite(siteId);
@@ -71,6 +74,32 @@ try {
   const { rows } = await client.query('SELECT collection, count(*)::int AS n FROM content_records WHERE site = $1 GROUP BY 1 ORDER BY 1', [site.id]);
   console.log(`\n${site.id} now holds:`);
   for (const row of rows) console.log(`  ${row.collection.padEnd(22)} ${row.n}`);
+
+  if (publish) {
+    // What "Publish to website" writes, minus the rebuild: pages read this
+    // snapshot at load, so the site shows the reset content right away.
+    const everything = {};
+    for (const row of (await client.query('SELECT collection, id, sort_order, is_active, data FROM content_records WHERE site = $1', [site.id])).rows) {
+      (everything[row.collection] ??= { records: [], categories: [] }).records.push({
+        ...JSON.parse(row.data),
+        id: row.id,
+        sortOrder: row.sort_order,
+        isActive: row.is_active,
+      });
+    }
+    for (const row of (await client.query('SELECT collection, categories FROM collection_meta WHERE site = $1', [site.id])).rows) {
+      (everything[row.collection] ??= { records: [], categories: [] }).categories = JSON.parse(row.categories);
+    }
+    const { buildDeliveryFiles } = await import('../api/src/core/delivery.js');
+    const { createSnapshotWriter } = await import('../api/src/aws/snapshot.js');
+    const { stackOutputs } = await import('./lib/aws.mjs');
+    await createSnapshotWriter({ bucket: stackOutputs().MediaBucket }).write(site.id, {
+      site: site.id,
+      publishedAt: new Date().toISOString(),
+      ...buildDeliveryFiles(site.collections, everything),
+    });
+    console.log(`\nPublished the snapshot - ${site.id}'s pages show this content within seconds.`);
+  }
 } catch (error) {
   await client.query('ROLLBACK').catch(() => undefined);
   throw error;
