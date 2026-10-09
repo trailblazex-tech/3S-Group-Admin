@@ -316,7 +316,7 @@ export function AdminLayout({ sites, upcoming, onSignOut, children }: AdminLayou
 
         <div className="border-t border-white/10 p-3">
           <div className="flex items-center gap-3 px-2 py-2">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-brand-gold">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-gold">
               <ShieldCheck className="h-4 w-4" />
             </span>
             <div className="min-w-0 flex-1">
