@@ -24,7 +24,8 @@ aws(['s3', 'sync', 'admin/dist/assets', `${bucket}/assets`, '--delete', '--cache
   json: false,
 });
 aws(['s3', 'cp', 'admin/dist/index.html', `${bucket}/index.html`, '--cache-control', 'no-cache'], { json: false });
-aws(['cloudfront', 'create-invalidation', '--distribution-id', outputs.AdminDistributionId, '--paths', '/index.html', '/'], {
+aws(['s3', 'cp', 'admin/dist/guide.html', `${bucket}/guide.html`, '--cache-control', 'no-cache'], { json: false });
+aws(['cloudfront', 'create-invalidation', '--distribution-id', outputs.AdminDistributionId, '--paths', '/index.html', '/guide.html', '/'], {
   quiet: true,
 });
 
