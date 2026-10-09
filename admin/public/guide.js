@@ -6,6 +6,13 @@
   fit(); wide.addEventListener('change', fit);
   // On phones, picking a section folds the contents away.
   toc.addEventListener('click', (e) => { if (e.target.closest('a') && !wide.matches) toc.open = false; });
+  // In-page links scroll here themselves. Inside the admin this page is a frame with no address of its own, where a plain "#section" link would try to open the admin's own page in it.
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest('a[href^="#"]');
+    if (!a) return;
+    e.preventDefault();
+    document.getElementById(decodeURIComponent(a.getAttribute('href').slice(1)))?.scrollIntoView();
+  });
 
   // Highlight the section being read: the last one whose top has passed a third of the screen.
   const links = [...document.querySelectorAll('nav.toc a')];

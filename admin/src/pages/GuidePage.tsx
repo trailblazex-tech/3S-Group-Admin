@@ -24,7 +24,7 @@ export function GuidePage() {
   }, []);
 
   return (
-    <div className="flex h-[calc(100dvh-5.5rem)] flex-col gap-4 lg:h-[calc(100dvh-4rem)]">
+    <div className="flex h-[calc(100dvh-8rem)] flex-col gap-4 lg:h-[calc(100dvh-5.5rem)]">
       <div>
         <h1 className="font-display text-2xl font-semibold text-foreground">Guide</h1>
         <p className="text-sm text-muted-foreground">Step-by-step help for every screen, with pictures.</p>
