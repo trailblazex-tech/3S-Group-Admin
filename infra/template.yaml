@@ -25,24 +25,10 @@ Parameters:
     Type: String
     Default: ''
     Description: Route 53 hosted zone of AdminDomain (required with AdminDomain).
-  AuthRecoveryContacts:
-    Type: String
-    Default: '{}'
-    Description: >-
-      JSON object mapping a login email that has no inbox to the inbox that gets its
-      emails (password reset codes...), e.g. {"admin@example.com":"owner@example.org"}.
-  AuthMailerEnabled:
-    Type: String
-    Default: 'false'
-    AllowedValues: ['true', 'false']
-    Description: >-
-      Route Cognito's emails through AuthMailerFunction. Turn on only once the
-      admin domain is verified in SES (and, in the SES sandbox, every recipient).
 
 Conditions:
   HasAlarmEmail: !Not [!Equals [!Ref AlarmEmail, '']]
   HasAdminDomain: !Not [!Equals [!Ref AdminDomain, '']]
-  UseAuthMailer: !And [!Condition HasAdminDomain, !Equals [!Ref AuthMailerEnabled, 'true']]
 
 Resources:
   # ---------------------------------------------------------------------------
@@ -84,15 +70,6 @@ Resources:
             You have been invited to 3S Admin, the content platform for the 3S Group websites.<br><br>
             Email: {username}<br>Temporary password: {####}<br><br>
             Sign in within 7 days. You will choose your own password and set up an authenticator app.
-      # With an admin domain, every email (reset codes, temporary passwords)
-      # goes through AuthMailerFunction and SES instead of Cognito's default.
-      LambdaConfig: !If
-        - UseAuthMailer
-        - KMSKeyID: !GetAtt AuthEmailKey.Arn
-          CustomEmailSender:
-            LambdaArn: !GetAtt AuthMailerFunction.Arn
-            LambdaVersion: V1_0
-        - !Ref AWS::NoValue
       UserPoolTags:
         Project: 3s-admin
 
@@ -123,136 +100,6 @@ Resources:
       GroupName: platform-admins
       Description: Can edit every website on the platform.
       Precedence: 0
-
-  # ---------------------------------------------------------------------------
-  # Account emails - Cognito's custom email sender, sending through SES from
-  # no-reply@<admin domain> (code deployed by scripts/deploy-api.mjs)
-  # ---------------------------------------------------------------------------
-  AuthEmailKey:
-    Type: AWS::KMS::Key
-    Condition: HasAdminDomain
-    Properties:
-      Description: 3S Admin - encrypts the codes Cognito hands to the custom email sender
-      EnableKeyRotation: true
-      KeyPolicy:
-        Version: '2012-10-17'
-        Statement:
-          # IAM decides who may use the key: Cognito's one-time grant is made by
-          # whoever deploys this stack, decryption is AuthMailerRole's alone.
-          - Sid: AccountAdministers
-            Effect: Allow
-            Principal:
-              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
-            Action: kms:*
-            Resource: '*'
-      Tags:
-        - Key: Project
-          Value: 3s-admin
-
-  AuthEmailIdentity:
-    Type: AWS::SES::EmailIdentity
-    Condition: HasAdminDomain
-    Properties:
-      EmailIdentity: !Ref AdminDomain
-      DkimSigningAttributes:
-        NextSigningKeyLength: RSA_2048_BIT
-
-  AuthEmailDkimRecords:
-    Type: AWS::Route53::RecordSetGroup
-    Condition: HasAdminDomain
-    Properties:
-      HostedZoneId: !Ref AdminHostedZoneId
-      RecordSets:
-        - Name: !GetAtt AuthEmailIdentity.DkimDNSTokenName1
-          Type: CNAME
-          TTL: '1800'
-          ResourceRecords: [!GetAtt AuthEmailIdentity.DkimDNSTokenValue1]
-        - Name: !GetAtt AuthEmailIdentity.DkimDNSTokenName2
-          Type: CNAME
-          TTL: '1800'
-          ResourceRecords: [!GetAtt AuthEmailIdentity.DkimDNSTokenValue2]
-        - Name: !GetAtt AuthEmailIdentity.DkimDNSTokenName3
-          Type: CNAME
-          TTL: '1800'
-          ResourceRecords: [!GetAtt AuthEmailIdentity.DkimDNSTokenValue3]
-
-  AuthMailerLogGroup:
-    Type: AWS::Logs::LogGroup
-    Condition: HasAdminDomain
-    Properties:
-      LogGroupName: /aws/lambda/3s-admin-auth-mailer
-      RetentionInDays: 30
-
-  AuthMailerRole:
-    Type: AWS::IAM::Role
-    Condition: HasAdminDomain
-    Properties:
-      RoleName: 3s-admin-auth-mailer-role
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: least-privilege
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Sid: Logs
-                Effect: Allow
-                Action: [logs:CreateLogStream, logs:PutLogEvents]
-                Resource: !Sub ${AuthMailerLogGroup.Arn}:*
-              - Sid: DecryptCognitoCodes
-                Effect: Allow
-                Action: kms:Decrypt
-                Resource: !GetAtt AuthEmailKey.Arn
-              # In the SES sandbox the recipient's identity is checked too.
-              - Sid: SendAccountEmails
-                Effect: Allow
-                Action: ses:SendEmail
-                Resource: !Sub arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/*
-      Tags:
-        - Key: Project
-          Value: 3s-admin
-
-  AuthMailerFunction:
-    Type: AWS::Lambda::Function
-    Condition: HasAdminDomain
-    Properties:
-      FunctionName: 3s-admin-auth-mailer
-      Description: Sends 3S Admin account emails for Cognito (code deployed by scripts/deploy-api.mjs)
-      Runtime: nodejs22.x
-      Architectures: [arm64]
-      Handler: index.handler
-      MemorySize: 256
-      Timeout: 10
-      Role: !GetAtt AuthMailerRole.Arn
-      LoggingConfig:
-        LogGroup: !Ref AuthMailerLogGroup
-      Environment:
-        Variables:
-          KMS_KEY_ARN: !GetAtt AuthEmailKey.Arn
-          MAIL_FROM: !Sub 3S Admin <no-reply@${AdminDomain}>
-          RECOVERY_CONTACTS: !Ref AuthRecoveryContacts
-          NODE_OPTIONS: --enable-source-maps
-      Code:
-        ZipFile: |
-          exports.handler = async () => { throw new Error('The auth mailer is not deployed yet.'); };
-      Tags:
-        - Key: Project
-          Value: 3s-admin
-
-  AuthMailerInvokePermission:
-    Type: AWS::Lambda::Permission
-    Condition: HasAdminDomain
-    Properties:
-      FunctionName: !Ref AuthMailerFunction
-      Action: lambda:InvokeFunction
-      Principal: cognito-idp.amazonaws.com
-      # SourceAccount, not the pool's ARN: the pool refers to this function.
-      SourceAccount: !Ref AWS::AccountId
 
   # ---------------------------------------------------------------------------
   # Content database
@@ -781,9 +628,6 @@ Outputs:
     Value: !Sub ${Database.Identifier}.dsql.${AWS::Region}.on.aws
   ApiFunctionName:
     Value: !Ref ApiFunction
-  AuthMailerFunctionName:
-    Condition: HasAdminDomain
-    Value: !Ref AuthMailerFunction
   ApiFunctionRoleArn:
     Value: !GetAtt ApiFunctionRole.Arn
   MediaBucket:
