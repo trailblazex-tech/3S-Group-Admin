@@ -1,6 +1,6 @@
 // Builds index.html for the 3S Admin client guide from the screenshots and
 // the callout positions the capture script recorded.
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -537,3 +537,9 @@ const shared = html
 if (shared.includes('@3sgroup.co.in')) throw new Error('login email left in the page');
 writeFileSync(path.join(dir, 'dist', 'index.html'), shared);
 console.log('dist/index.html', Buffer.byteLength(shared));
+
+// The admin shows the same page under "Guide" in its menu, from its own static files.
+const adminPublic = path.join(dir, '..', '..', 'admin', 'public');
+mkdirSync(adminPublic, { recursive: true });
+writeFileSync(path.join(adminPublic, 'guide.html'), shared);
+console.log('admin/public/guide.html');

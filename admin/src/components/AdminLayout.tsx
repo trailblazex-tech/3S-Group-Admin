@@ -4,6 +4,7 @@ import { Link, NavLink, useLocation } from 'react-router-dom';
 import {
   BarChart3,
   Activity,
+  BookOpen,
   BriefcaseBusiness,
   Check,
   ChevronsUpDown,
@@ -307,6 +308,10 @@ export function AdminLayout({ sites, upcoming, onSignOut, children }: AdminLayou
           <NavLink to={path('/activity')} className={linkClass}>
             <Activity className="h-4 w-4 shrink-0" />
             Activity log
+          </NavLink>
+          <NavLink to={path('/guide')} className={linkClass}>
+            <BookOpen className="h-4 w-4 shrink-0" />
+            Guide
           </NavLink>
           <a href={site.publicUrl} target="_blank" rel="noopener noreferrer" className={linkClass({ isActive: false })}>
             <ExternalLink className="h-4 w-4 shrink-0" />
