@@ -25,7 +25,9 @@ aws(['s3', 'sync', 'admin/dist/assets', `${bucket}/assets`, '--delete', '--cache
 });
 aws(['s3', 'cp', 'admin/dist/index.html', `${bucket}/index.html`, '--cache-control', 'no-cache'], { json: false });
 aws(['s3', 'cp', 'admin/dist/guide.html', `${bucket}/guide.html`, '--cache-control', 'no-cache'], { json: false });
-aws(['cloudfront', 'create-invalidation', '--distribution-id', outputs.AdminDistributionId, '--paths', '/index.html', '/guide.html', '/'], {
+aws(['s3', 'cp', 'admin/dist/guide.js', `${bucket}/guide.js`, '--cache-control', 'no-cache'], { json: false });
+aws(['s3', 'sync', 'admin/dist/guide-fonts', `${bucket}/guide-fonts`, '--delete', '--cache-control', 'public, max-age=31536000, immutable'], { json: false });
+aws(['cloudfront', 'create-invalidation', '--distribution-id', outputs.AdminDistributionId, '--paths', '/index.html', '/guide.html', '/guide.js', '/'], {
   quiet: true,
 });
 

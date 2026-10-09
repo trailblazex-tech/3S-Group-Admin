@@ -7,9 +7,11 @@
 <meta name="description" content="How to use 3S Admin to update thekonarkacademy.com.">
 <title>3S Admin Guide</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2321253f'/%3E%3Ctext x='32' y='42' font-family='Georgia' font-size='28' font-weight='700' text-anchor='middle' fill='%23e3c47c'%3E3S%3C/text%3E%3C/svg%3E">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap">
 <style>
+@font-face{font-family:'Fraunces';font-style:normal;font-display:swap;font-weight:100 900;src:url(/guide-fonts/fraunces-latin.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:'Fraunces';font-style:normal;font-display:swap;font-weight:100 900;src:url(/guide-fonts/fraunces-latin-ext.woff2) format('woff2');unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:'Inter';font-style:normal;font-display:swap;font-weight:100 900;src:url(/guide-fonts/inter-latin.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:'Inter';font-style:normal;font-display:swap;font-weight:100 900;src:url(/guide-fonts/inter-latin-ext.woff2) format('woff2');unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
 /* Layout: a reading column with a sticky contents rail on wide screens; screenshots run the column's full width. */
 :root{
   --bg:#f7f5f0; --surface:#ffffff; --ink:#1d2236; --muted:#5e6378; --line:#e4e0d6;
@@ -491,61 +493,6 @@ footer{max-width:1180px;margin:0 auto;padding:0 20px 48px;color:var(--muted);fon
   <div class="lightbox-bar"><p></p><button type="button">Close</button></div>
   <div class="lightbox-stage"></div>
 </div>
-<script>
-(() => {
-  const toc = document.querySelector('nav.toc details');
-  const wide = matchMedia('(min-width: 901px)');
-  const fit = () => { toc.open = wide.matches; };
-  fit(); wide.addEventListener('change', fit);
-  // On phones, picking a section folds the contents away.
-  toc.addEventListener('click', (e) => { if (e.target.closest('a') && !wide.matches) toc.open = false; });
-
-  // Highlight the section being read: the last one whose top has passed a third of the screen.
-  const links = [...document.querySelectorAll('nav.toc a')];
-  const targets = links.map((a) => document.getElementById(a.getAttribute('href').slice(1)));
-  let current = null;
-  const spy = () => {
-    let index = 0;
-    targets.forEach((t, i) => { if (t && t.getBoundingClientRect().top <= innerHeight / 3) index = i; });
-    if (current === index) return;
-    current = index;
-    links.forEach((a, i) => a.classList.toggle('active', i === index));
-    // Keep it visible inside the rail only - never move the page itself.
-    const nav = document.querySelector('nav.toc'); const link = links[index];
-    if (wide.matches && (link.offsetTop < nav.scrollTop || link.offsetTop > nav.scrollTop + nav.clientHeight - link.offsetHeight)) nav.scrollTop = link.offsetTop - nav.clientHeight / 2;
-  };
-  // Reading progress and back-to-top.
-  const bar = document.querySelector('.progress');
-  const up = document.querySelector('.to-top');
-  const onScroll = () => {
-    const max = document.documentElement.scrollHeight - innerHeight;
-    bar.style.transform = 'scaleX(' + (max > 0 ? scrollY / max : 0) + ')';
-    up.classList.toggle('show', scrollY > 900);
-  };
-  addEventListener('scroll', () => { onScroll(); spy(); }, { passive: true }); onScroll(); spy();
-  up.addEventListener('click', () => scrollTo({ top: 0 }));
-
-  // Screenshots open full size, with their numbered marks.
-  const box = document.querySelector('.lightbox');
-  const stage = box.querySelector('.lightbox-stage');
-  const title = box.querySelector('.lightbox-bar p');
-  let opener = null;
-  const close = () => { box.hidden = true; stage.textContent = ''; document.body.classList.remove('locked'); opener?.focus(); };
-  document.querySelectorAll('button.pic').forEach((pic) => pic.addEventListener('click', () => {
-    if (pic.closest('.lightbox')) return;
-    opener = pic;
-    const copy = pic.cloneNode(true);
-    copy.setAttribute('tabindex', '-1');
-    copy.querySelector('.zoom-hint')?.remove();
-    stage.replaceChildren(copy);
-    title.textContent = pic.querySelector('img').alt;
-    box.hidden = false; document.body.classList.add('locked');
-    box.querySelector('.lightbox-bar button').focus();
-  }));
-  box.querySelector('.lightbox-bar button').addEventListener('click', close);
-  box.addEventListener('click', (e) => { if (e.target === box || e.target === stage) close(); });
-  addEventListener('keydown', (e) => { if (e.key === 'Escape' && !box.hidden) close(); });
-})();
-</script>
+<script src="/guide.js"></script>
 </body>
 </html>

@@ -1,6 +1,6 @@
 // Builds index.html for the 3S Admin client guide from the screenshots and
 // the callout positions the capture script recorded.
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -538,8 +538,34 @@ if (shared.includes('@3sgroup.co.in')) throw new Error('login email left in the 
 writeFileSync(path.join(dir, 'dist', 'index.html'), shared);
 console.log('dist/index.html', Buffer.byteLength(shared));
 
-// The admin shows the same page under "Guide" in its menu, from its own static files.
+// The admin shows the same page under "Guide" in its menu, from its own static
+// files. Its security policy allows only its own scripts and fonts, so that copy
+// gets a guide.js and local font files instead of an inline script and Google Fonts.
 const adminPublic = path.join(dir, '..', '..', 'admin', 'public');
-mkdirSync(adminPublic, { recursive: true });
-writeFileSync(path.join(adminPublic, 'guide.html'), shared);
-console.log('admin/public/guide.html');
+const fontDir = path.join(adminPublic, 'guide-fonts');
+mkdirSync(fontDir, { recursive: true });
+const latin = 'U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD';
+const latinExt = 'U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF';
+// The admin already ships these two variable fonts; the guide reuses them.
+const fontFaces = [
+  ['Fraunces', 'fraunces', 'latin', latin],
+  ['Fraunces', 'fraunces', 'latin-ext', latinExt],
+  ['Inter', 'inter', 'latin', latin],
+  ['Inter', 'inter', 'latin-ext', latinExt],
+]
+  .map(([family, pkg, subset, range]) => {
+    const file = `${pkg}-${subset}.woff2`;
+    copyFileSync(path.join(dir, '..', '..', 'node_modules', '@fontsource-variable', pkg, 'files', `${pkg}-${subset}-wght-normal.woff2`), path.join(fontDir, file));
+    return `@font-face{font-family:'${family}';font-style:normal;font-display:swap;font-weight:100 900;src:url(/guide-fonts/${file}) format('woff2');unicode-range:${range}}`;
+  })
+  .join('\n');
+const script = shared.match(/<script>([\s\S]*?)<\/script>/);
+if (!script) throw new Error('guide script not found');
+writeFileSync(path.join(adminPublic, 'guide.js'), script[1]);
+const forAdmin = shared
+  .replace(/<link rel="preconnect"[^\n]*\n<link rel="stylesheet" href="https:\/\/fonts\.googleapis[^\n]*\n/, '')
+  .replace('<style>', `<style>\n${fontFaces}`)
+  .replace(script[0], '<script src="/guide.js"></script>');
+if (forAdmin.includes('googleapis') || forAdmin.includes('<script>')) throw new Error('admin guide still needs outside resources');
+writeFileSync(path.join(adminPublic, 'guide.html'), forAdmin);
+console.log('admin/public/guide.html, guide.js, guide-fonts/');
