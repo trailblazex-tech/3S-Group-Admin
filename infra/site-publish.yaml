@@ -1,0 +1,65 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Lets the 3S Global Greens publish workflow (GitHub Actions, repo
+  trailblazex-tech/3S_GlobalGreen) upload the built site to its S3 bucket and
+  refresh its CloudFront distribution - nothing else. GitHub signs in with
+  OIDC, so no AWS keys are stored anywhere.
+  Deploy: aws cloudformation deploy --stack-name 3s-site-publish
+          --template-file infra/site-publish.yaml --capabilities CAPABILITY_NAMED_IAM
+
+Parameters:
+  Repository:
+    Type: String
+    Default: trailblazex-tech/3S_GlobalGreen
+  SiteBucket:
+    Type: String
+    Default: 3sglobalgreens.com
+  DistributionId:
+    Type: String
+    Default: E1AKZBHB9P57O
+
+Resources:
+  # One per account: GitHub Actions' identity provider.
+  GitHubOidc:
+    Type: AWS::IAM::OIDCProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList: [sts.amazonaws.com]
+
+  GlobalGreensPublishRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: 3s-globalgreens-publish
+      Description: Publish workflow of 3S Global Greens - upload the site and refresh CloudFront.
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref GitHubOidc
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              # Only workflow runs on the main branch of that one repository.
+              StringLike:
+                token.actions.githubusercontent.com:sub: !Sub repo:${Repository}:ref:refs/heads/main
+      Policies:
+        - PolicyName: upload-and-refresh
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: s3:ListBucket
+                Resource: !Sub arn:aws:s3:::${SiteBucket}
+              - Effect: Allow
+                Action: [s3:GetObject, s3:PutObject]
+                Resource: !Sub arn:aws:s3:::${SiteBucket}/*
+              - Effect: Allow
+                Action: cloudfront:CreateInvalidation
+                Resource: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${DistributionId}
+
+Outputs:
+  GlobalGreensPublishRoleArn:
+    Value: !GetAtt GlobalGreensPublishRole.Arn

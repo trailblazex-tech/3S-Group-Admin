@@ -1,5 +1,32 @@
 # Going live: 3S Minerals and 3S Global Greens
 
+## Status (13 Nov 2026)
+
+Done: API and admin deployed (both sites, three guides); content imported and
+matches the sites exactly; cfo@3sgroup.co.in has both sites; first snapshots
+published; Global Greens new build live (pages identical to before, enquiries
+also reach Leads); Minerals new build uploaded to its bucket; all three form
+routes answer in production.
+
+Left:
+
+1. **Minerals CloudFront** (distribution `EIWU9VKDSAN5S`) is in AWS account
+   794038247362, not the admin account, and caches the home page for a year.
+   Someone with access runs once:
+   `aws cloudfront create-invalidation --distribution-id EIWU9VKDSAN5S --paths "/*"`
+   Until then visitors keep seeing the old Minerals build. After it, Publish
+   reaches Minerals visitors within seconds, with no further step.
+2. **Global Greens Publish** (rebuild on Publish): deploy
+   `infra/site-publish.yaml` (GitHub OIDC role, limited to that bucket and
+   distribution), then `npm run site:connect-github` with a fine-grained
+   token. The workflow in 3S_GlobalGreen already uses that role and needs no
+   repository secrets. Until then Publish on Global Greens says the website
+   could not be rebuilt; changes stay saved.
+
+   ```bash
+   aws cloudformation deploy --stack-name 3s-site-publish --template-file infra/site-publish.yaml --capabilities CAPABILITY_NAMED_IAM
+   ```
+
 Both sites are on the platform in code (`api/src/sites/minerals`,
 `api/src/sites/globalgreens`) and fully tested locally. Nothing below has
 been run against production yet. Do the steps in order; each one is safe to
@@ -88,9 +115,8 @@ published content, build, upload to the S3 bucket, refresh CloudFront.
    }
    ```
 
-2. **Repository settings** (Settings > Secrets and variables > Actions):
-   secret `AWS_DEPLOY_ROLE_ARN`; variables `AWS_REGION`, `SITE_BUCKET`,
-   `CLOUDFRONT_ID`.
+2. **Repository settings**: none - the workflow names the role, bucket and
+   distribution itself (none is secret).
 3. Merge `admin-content` into `main`, then run the workflow once by hand
    (Actions > Publish website > Run workflow) and check the live site.
 4. **Connect Publish to the workflow** - a fine-grained GitHub token for that
