@@ -1,16 +1,37 @@
-# Client guide - 3S Admin for The Konark Academy
+# Client guides - 3S Admin, one per website
 
-The how-to guide shared with the client: one self-contained HTML page with
-annotated screenshots of every admin screen.
+The how-to guides shared with each website's team: one self-contained HTML
+page per site with annotated screenshots of its admin screens. The admin
+shows the guide of the open website under **Guide** in its menu.
 
-- Live copy: https://mehar-sharma.github.io/3s-admin-guide/ (repo Mehar-Sharma/3s-admin-guide,
-  GitHub Pages from `main`). The published copy leaves out the login email.
-- `build.mjs` builds `dist/index.html` from `img/*.webp` (the screenshots) and
-  `callouts.json` (where each numbered mark points, in screenshot pixels).
-  Edit the section text in `build.mjs`, then:
+| Site | Page text | Screenshots | Built into |
+| --- | --- | --- | --- |
+| The Konark Academy | `sites/konark.mjs` | `img/`, `callouts.json` | `dist/index.html`, `admin/public/guide.html` |
+| 3S Minerals | `sites/minerals.mjs` | `sites/minerals/` | `dist/minerals.html`, `admin/public/guide-minerals.html` |
+| 3S Global Greens | `sites/globalgreens.mjs` | `sites/globalgreens/` | `dist/globalgreens.html`, `admin/public/guide-globalgreens.html` |
 
-      mkdir -p dist && node build.mjs
+A site's own screenshots override the shared ones in `img/` (the sign-in
+screen is shared). `callouts.json` holds where each numbered mark points, in
+screenshot pixels.
 
-  and copy `dist/index.html` over `index.html` in the Pages repo.
-- The screenshots were taken from the real admin screens rendered with Konark's
-  content; Leads and Analytics use sample data and say so on the page.
+## Change the text
+
+Edit `sites/<site>.mjs`, then rebuild every guide:
+
+    npm run guide:build
+
+and deploy the admin (`npm run deploy:admin` uploads every `guide*.html`).
+Konark's published copy: https://mehar-sharma.github.io/3s-admin-guide/
+(repo Mehar-Sharma/3s-admin-guide, GitHub Pages from `main`) - copy
+`dist/index.html` over its `index.html`. Published copies leave out the login
+email.
+
+## Retake the screenshots
+
+After an admin screen changes, retake that site's screenshots with
+`capture/` - see `capture/README.md`. The shots and the parts each numbered
+mark points at are declared in `sites/<site>.mjs` (`shots`); the legend under
+each picture lists the marks in the same order.
+
+Konark's screenshots were taken before this tool existed; its content file
+has no `shots`, so its pictures are kept as they are.

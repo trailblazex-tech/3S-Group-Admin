@@ -75,6 +75,23 @@ export function createPublisher({ snapshot, resolveWebhook, rebuild = triggerReb
         console.error('[publish] rebuild trigger error', site.id, error);
       }
 
+      // A pre-rendered site (publishDelay: 'rebuild') only changes when its
+      // build runs, so the snapshot alone publishes nothing there.
+      if (site.publishDelay === 'rebuild') {
+        if (!rebuildStarted) {
+          return {
+            queued: false,
+            rebuildStarted,
+            message: 'Your changes are saved, but the website could not be rebuilt right now. Try Publish again in a few minutes - if it keeps failing, contact the 3S Group team.',
+          };
+        }
+        return {
+          queued: true,
+          rebuildStarted,
+          message: `Publishing - ${site.name} is being rebuilt with your changes. They appear on the website in about 5 minutes.`,
+        };
+      }
+
       return {
         queued: true,
         rebuildStarted,

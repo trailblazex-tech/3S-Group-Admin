@@ -45,6 +45,37 @@ export function extractYoutubeId(raw) {
   return match ? match[1] : value;
 }
 
+/**
+ * "lat,lng" out of what an editor pastes: "24.44723, 73.8706816", or a Google
+ * Maps link (…/@24.44,73.87,17z, …?q=24.44,73.87, …!3d24.44!4d73.87).
+ * Returns null when no valid pair is found.
+ */
+export function parseLatLng(raw) {
+  let value = String(raw ?? '').trim();
+  try {
+    value = decodeURIComponent(value);
+  } catch {
+    // A stray % in a pasted link: match on it as typed.
+  }
+  value = value.replace(/\s+/g, ' ');
+  if (!value) return '';
+  const number = String.raw`(-?\d{1,3}(?:\.\d+)?)`;
+  const patterns = [
+    new RegExp(String.raw`!3d${number}!4d${number}`),
+    new RegExp(String.raw`@${number},${number}`),
+    new RegExp(String.raw`[?&](?:q|query|ll|destination)=${number},\s?${number}`),
+    new RegExp(String.raw`^${number}\s*,\s*${number}$`),
+  ];
+  for (const pattern of patterns) {
+    const match = value.match(pattern);
+    if (!match) continue;
+    const lat = Number(match[1]);
+    const lng = Number(match[2]);
+    if (Math.abs(lat) <= 90 && Math.abs(lng) <= 180) return `${lat},${lng}`;
+  }
+  return null;
+}
+
 /** YYYY-MM-DD that exists on the calendar (Date would quietly roll 2026-02-30 into March). */
 function isRealDate(value) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
@@ -65,8 +96,12 @@ function validateField(field, raw, categories) {
     case 'text':
     case 'textarea': {
       const parsed = field.parseAs === 'youtubeId' ? extractYoutubeId(raw) : raw;
-      const value = cleanString(parsed, field.maxLength ?? 1000);
+      let value = cleanString(parsed, field.maxLength ?? 1000);
       if (field.required && !value) throw new ApiError(400, `${label} is required.`);
+      if (field.parseAs === 'latLng' && value) {
+        value = parseLatLng(value);
+        if (!value) throw new ApiError(400, `${label}: paste a Google Maps link, or type the latitude and longitude like 24.44723, 73.87068.`);
+      }
       if (field.parseAs === 'youtubeId' && value && !/^[a-zA-Z0-9_-]{11}$/.test(value)) {
         throw new ApiError(400, `${label} does not look like a valid YouTube link or video id.`);
       }
@@ -118,7 +153,10 @@ function validateField(field, raw, categories) {
       if (!Number.isFinite(value)) throw new ApiError(400, `${label} must be a number.`);
       if (field.min !== undefined && value < field.min) throw new ApiError(400, `${label} must be ${field.min} or more.`);
       if (field.max !== undefined && value > field.max) throw new ApiError(400, `${label} must be ${field.max} or less.`);
-      return Math.round(value);
+      // Whole numbers unless the field allows decimal places.
+      if (!field.decimals) return Math.round(value);
+      const scale = 10 ** field.decimals;
+      return Math.round(value * scale) / scale;
     }
 
     case 'boolean':
@@ -134,6 +172,29 @@ function validateField(field, raw, categories) {
         if (wrong) throw new ApiError(400, `"${wrong}" is not a GA4 measurement ID - they look like G-XXXXXXXXXX.`);
         return ids.length > 0 ? ids : null;
       }
+      return cleaned.length > 0 ? cleaned : null;
+    }
+
+    case 'list': {
+      if (raw === undefined || raw === null || raw === '') {
+        if (field.required) throw new ApiError(400, `${label} needs at least one line.`);
+        return null;
+      }
+      const lines = Array.isArray(raw) ? raw : String(raw).split(/\r?\n/);
+      const maxItemLength = field.maxItemLength ?? 300;
+      const cleaned = [];
+      for (const line of lines) {
+        // Runs of ordinary spaces and tabs collapse; a non-breaking space an
+        // editor (or the old site text) chose on purpose is kept.
+        const item = cleanString(typeof line === 'string' ? line.replace(/[ \t]+/g, ' ') : '', 10_000);
+        if (!item) continue;
+        if (item.length > maxItemLength) {
+          throw new ApiError(400, `${label}: each line can be up to ${maxItemLength} characters - "${item.slice(0, 40)}…" is longer.`);
+        }
+        cleaned.push(item);
+      }
+      if (cleaned.length > 100) throw new ApiError(400, `${label} can have up to 100 lines.`);
+      if (field.required && cleaned.length === 0) throw new ApiError(400, `${label} needs at least one line.`);
       return cleaned.length > 0 ? cleaned : null;
     }
 

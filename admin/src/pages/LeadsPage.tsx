@@ -308,7 +308,7 @@ function Detail({ form, submission, onClose, onChanged, onDeleted }: { form: For
               maxLength={2000}
               value={note}
               onChange={(event) => setNote(event.target.value)}
-              placeholder="e.g. Called on 2 Oct, visiting Saturday with the child."
+              placeholder="e.g. Called on 2 Oct, sending the quote on Monday."
               className="mt-1.5 w-full rounded-lg border border-input bg-card px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
             />
             <button
@@ -422,6 +422,9 @@ export function LeadsPage() {
   const rated = ratingsField && overallKey ? filtered.map((row) => ((row[ratingsField] ?? {}) as Record<string, number>)[overallKey] ?? 0).filter((value) => value > 0) : [];
   const overall = rated.length ? rated.reduce((a, b) => a + b, 0) / rated.length : 0;
   const interestField = form?.fields.find((field) => field.name === form.interestField);
+  // The "Want admission" count only makes sense for a yes/no interest
+  // question (Konark's); other choices (buy / sell) are charted instead.
+  const yesNoInterest = Boolean(interestField?.options?.some((option) => option.value === 'yes'));
   const interestedYes = interestField ? filtered.filter((row) => row[interestField.name] === 'yes').length : 0;
 
   return (
@@ -429,7 +432,7 @@ export function LeadsPage() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="font-display text-3xl font-semibold text-foreground">Feedback &amp; Leads</h1>
-          <p className="mt-1 text-sm text-muted-foreground">What parents and visitors sent through the website. Newest first.</p>
+          <p className="mt-1 text-sm text-muted-foreground">What visitors sent through the website's forms. Newest first.</p>
         </div>
         <div className="flex gap-2">
           <button
@@ -505,7 +508,7 @@ export function LeadsPage() {
             ) : (
               <StatCard label="This week" value={rows.filter((row) => Date.parse(row.at) >= weekAgo).length} detail="received in the last 7 days" />
             )}
-            {interestField ? (
+            {interestField && yesNoInterest ? (
               <StatCard label="Want admission" value={interestedYes} detail={filtered.length ? `${Math.round((interestedYes / filtered.length) * 100)}% said yes` : 'no answers yet'} />
             ) : (
               <StatCard label="Followed up" value={filtered.filter((row) => row.status !== 'new').length} detail="following up or done" />
@@ -522,7 +525,7 @@ export function LeadsPage() {
             type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search name, phone, class, comments..."
+            placeholder="Search names, phones, emails, messages..."
             aria-label="Search submissions"
             className="h-10 w-full rounded-lg border border-input bg-card pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-ring"
           />
@@ -537,7 +540,7 @@ export function LeadsPage() {
         </select>
         {interestField && (
           <select value={interest} onChange={(event) => setInterest(event.target.value)} aria-label={interestField.label} className="h-10 rounded-lg border border-input bg-card px-3 text-sm outline-none focus:ring-2 focus:ring-ring">
-            <option value="">Any interest</option>
+            <option value="">{form?.interestAllLabel ?? 'Any interest'}</option>
             {interestField.options?.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
@@ -571,10 +574,11 @@ export function LeadsPage() {
           {filtered.map((row) => {
             const name = text(row[form!.titleField]) || 'Visitor';
             const phone = form!.phoneField ? text(row[form!.phoneField]) : '';
+            const listFields = form!.listFields ?? ['studentName', 'interestedClass', 'classInterestedIn', 'city'];
             const details = form!.fields
-              .filter((field) => ['studentName', 'interestedClass', 'classInterestedIn', 'city'].includes(field.name) && row[field.name])
+              .filter((field) => listFields.includes(field.name) && row[field.name])
               .map((field) => text(row[field.name]));
-            const comment = text(row.suggestions || row.likedMost || row.message);
+            const comment = text(form!.commentField ? row[form!.commentField] : row.suggestions || row.likedMost || row.message);
             return (
               <li key={row.id}>
                 <button type="button" onClick={() => setOpenId(row.id)} className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50">

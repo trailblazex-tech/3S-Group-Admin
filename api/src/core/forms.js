@@ -14,8 +14,16 @@
  *   phoneField, emailField - turned into call / WhatsApp / email buttons
  *   ratingsField         - a "ratings" field the admin averages and charts
  *   interestField        - a select the admin charts (e.g. admission interest)
+ *   interestAllLabel     - the "all" choice of the interest filter
+ *                          (default "Any interest")
+ *   listFields           - fields shown after the name in the Leads list
+ *                          (default: student, class and city fields)
+ *   commentField         - the field quoted in the Leads list (default: the
+ *                          suggestions, liked-most or message field)
  *
  * Field types: text | textarea | phone | email | select | ratings | datetime
+ *   phone: an Indian mobile number; with format: 'any', any phone number
+ *          (landline or international: 6 to 15 digits, a leading + allowed)
  *   ratings: { items: [{ name, label }], requiredItems: [names] } - 1 to 5 each
  */
 import crypto from 'node:crypto';
@@ -28,7 +36,8 @@ export const submissionStatuses = [
 ];
 
 const mobilePattern = /^(?:\+?91[-\s]?|0)?[6-9]\d{9}$/;
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const anyPhonePattern = /^\+?\d{6,15}$/;
+const emailPattern =/^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function cleanText(value, maxLength, { multiline = false } = {}) {
   if (typeof value !== 'string') return '';
@@ -53,6 +62,12 @@ function validateFormField(field, raw) {
       return value;
     }
     case 'phone': {
+      if (field.format === 'any') {
+        const value = cleanText(raw, 30).replace(/[\s\-().]/g, '');
+        if (field.required && !value) throw new ApiError(400, `${label} is required.`);
+        if (value && !anyPhonePattern.test(value)) throw new ApiError(400, `${label} is not a valid phone number.`);
+        return value;
+      }
       const value = cleanText(raw, 20).replace(/[\s-]/g, '');
       if (field.required && !value) throw new ApiError(400, `${label} is required.`);
       if (value && !mobilePattern.test(value)) throw new ApiError(400, 'A valid 10 digit mobile number is required.');
@@ -111,6 +126,9 @@ export function describeForms(forms, counts = {}) {
     emailField: form.emailField ?? null,
     ratingsField: form.ratingsField ?? null,
     interestField: form.interestField ?? null,
+    interestAllLabel: form.interestAllLabel ?? null,
+    listFields: form.listFields ?? null,
+    commentField: form.commentField ?? null,
     fields: form.fields,
     statuses: submissionStatuses,
     total: counts[name]?.total ?? 0,
@@ -131,8 +149,14 @@ export function assertValidForms(siteId, forms) {
       if (field.type === 'select' && !Array.isArray(field.options)) problems.push(`${where}.${field.name}: select needs options`);
       if (field.type === 'ratings' && !Array.isArray(field.items)) problems.push(`${where}.${field.name}: ratings needs items`);
     }
-    for (const key of ['titleField', 'phoneField', 'emailField', 'ratingsField', 'interestField']) {
+    for (const key of ['titleField', 'phoneField', 'emailField', 'ratingsField', 'interestField', 'commentField']) {
       if (form[key] && !names.has(form[key])) problems.push(`${where}: ${key} "${form[key]}" is not a field`);
+    }
+    for (const name of form.listFields ?? []) {
+      if (!names.has(name)) problems.push(`${where}: listFields "${name}" is not a field`);
+    }
+    for (const field of form.fields ?? []) {
+      if (field.format && (field.type !== 'phone' || field.format !== 'any')) problems.push(`${where}.${field.name}: format "any" is only for phone fields`);
     }
   }
   if (problems.length > 0) throw new Error(`Invalid form declarations:\n  ${problems.join('\n  ')}`);

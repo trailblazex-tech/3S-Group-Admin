@@ -22,9 +22,12 @@
     "user:invite": "node scripts/invite-user.mjs",
     "site:grant": "node scripts/grant-site.mjs",
     "site:connect-amplify": "node scripts/connect-amplify-site.mjs",
+    "site:connect-github": "node scripts/connect-github-site.mjs",
     "analytics:connect": "node scripts/connect-analytics.mjs",
     "library:build": "python scripts/greeting-library/build.py",
-    "library:upload": "node scripts/greeting-library/upload.mjs"
+    "library:upload": "node scripts/greeting-library/upload.mjs",
+    "guide:build": "node docs/client-guide/build.mjs konark && node docs/client-guide/build.mjs minerals && node docs/client-guide/build.mjs globalgreens",
+    "content:check": "node scripts/check-content.mjs"
   },
   "engines": {
     "node": ">=22"

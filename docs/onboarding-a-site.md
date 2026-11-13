@@ -47,7 +47,11 @@ step 4.
 
 ## 3. Import its current content
 
+First check every record passes the admin's own validation unchanged (so
+nothing imported is un-saveable later):
+
 ```bash
+npm run content:check -- --site minerals --from ../minerals-site/content
 npm run db:import -- --site minerals --from ../minerals-site/content --dry-run
 npm run db:import -- --site minerals --from ../minerals-site/content
 ```
@@ -55,7 +59,11 @@ npm run db:import -- --site minerals --from ../minerals-site/content
 ## 4. Wire the site's build
 
 In the site repo, copy `scripts/pull-content.mjs` from the Konark repo and
-add it to the build before compiling (Amplify: `preBuild`, after `npm ci`).
+add it to the build before compiling (Amplify: `preBuild`, after `npm ci`;
+GitHub Actions: see `.github/workflows/publish.yml` in 3S_GlobalGreen, and
+connect Publish to it with `npm run site:connect-github`). A pre-rendered
+site that only changes on a rebuild sets `publishDelay: 'rebuild'` in its
+`site.js`, so Publish reports a failed rebuild instead of claiming success.
 It does nothing until `CONTENT_DELIVERY_URL` is set, so this can ship early.
 
 ## 5. Ship and switch on

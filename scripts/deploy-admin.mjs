@@ -4,6 +4,7 @@
  *   npm run deploy:admin
  */
 import { execSync } from 'node:child_process';
+import { readdirSync } from 'node:fs';
 import { aws, stackOutputs } from './lib/aws.mjs';
 
 const outputs = stackOutputs();
@@ -24,10 +25,14 @@ aws(['s3', 'sync', 'admin/dist/assets', `${bucket}/assets`, '--delete', '--cache
   json: false,
 });
 aws(['s3', 'cp', 'admin/dist/index.html', `${bucket}/index.html`, '--cache-control', 'no-cache'], { json: false });
-aws(['s3', 'cp', 'admin/dist/guide.html', `${bucket}/guide.html`, '--cache-control', 'no-cache'], { json: false });
+// One guide page per website (guide.html is Konark's, guide-<site>.html the others').
+const guides = readdirSync('admin/dist').filter((name) => /^guide(-[a-z0-9-]+)?\.html$/.test(name));
+for (const guide of guides) {
+  aws(['s3', 'cp', `admin/dist/${guide}`, `${bucket}/${guide}`, '--cache-control', 'no-cache'], { json: false });
+}
 aws(['s3', 'cp', 'admin/dist/guide.js', `${bucket}/guide.js`, '--cache-control', 'no-cache'], { json: false });
 aws(['s3', 'sync', 'admin/dist/guide-fonts', `${bucket}/guide-fonts`, '--delete', '--cache-control', 'public, max-age=31536000, immutable'], { json: false });
-aws(['cloudfront', 'create-invalidation', '--distribution-id', outputs.AdminDistributionId, '--paths', '/index.html', '/guide.html', '/guide.js', '/'], {
+aws(['cloudfront', 'create-invalidation', '--distribution-id', outputs.AdminDistributionId, '--paths', '/index.html', ...guides.map((guide) => `/${guide}`), '/guide.js', '/'], {
   quiet: true,
 });
 

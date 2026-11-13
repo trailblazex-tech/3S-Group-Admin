@@ -40,8 +40,17 @@
  *   derivedRows   - { [record id]: "where it comes from" } rows the website
  *                   works out by itself; the admin shows them as automatic
  *
- * Field types: text | textarea | number | date | time | image | file | select | tags | boolean
+ * Field types: text | textarea | number | date | time | image | file | select | tags | list | boolean
+ *   tags  - short words or phrases, typed comma-separated (no commas inside one)
+ *   list  - one item per line, for bullet points that may contain commas;
+ *           maxItemLength caps each line (default 300)
  * Field options beyond the obvious ones:
+ *   accept        - on a file field, "video" takes an MP4 video instead of a PDF
+ *   decimals      - on a number field, how many decimal places it keeps
+ *                   (1-4; numbers are whole otherwise)
+ *   parseAs       - on a text field: "youtubeId" keeps the id out of a pasted
+ *                   YouTube link; "latLng" turns "24.44, 73.87" or a pasted
+ *                   Google Maps link into "24.44,73.87"
  *   library       - on an image field, "greetings" offers the ready-made
  *                   banner library alongside uploading
  *   showWhen      - { field, is: [values] }: the field only applies (is shown,
@@ -64,7 +73,7 @@ export const reservedCollectionNames = new Set(['activity', 'leads', 'analytics'
 
 export const displayModes =new Set(['list', 'form', 'cards']);
 
-export const fieldTypes = new Set(['text', 'textarea', 'number', 'date', 'time', 'image', 'file', 'select', 'tags', 'boolean']);
+export const fieldTypes = new Set(['text', 'textarea', 'number', 'date', 'time', 'image', 'file', 'select', 'tags', 'list', 'boolean']);
 
 export function getCollection(collections, name) {
   return Object.prototype.hasOwnProperty.call(collections, name) ? collections[name] : null;
@@ -137,6 +146,13 @@ export function assertValidCollections(siteId, collections) {
       if (field.showWhen && (!field.showWhen.field || !Array.isArray(field.showWhen.is))) {
         problems.push(`${where}.${field.name}: showWhen needs { field, is: [...] }`);
       }
+      if (field.accept && (field.accept !== 'video' || field.type !== 'file')) {
+        problems.push(`${where}.${field.name}: accept "video" is only for file fields`);
+      }
+      if (field.decimals !== undefined && (field.type !== 'number' || ![1, 2, 3, 4].includes(field.decimals))) {
+        problems.push(`${where}.${field.name}: decimals is 1-4, on number fields only`);
+      }
+      if (field.parseAs === 'latLng' && field.type !== 'text') problems.push(`${where}.${field.name}: parseAs "latLng" is only for text fields`);
       if (field.appearance && (field.appearance !== 'choices' || field.type !== 'select')) {
         problems.push(`${where}.${field.name}: appearance "choices" is only for select fields`);
       }

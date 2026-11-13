@@ -22,6 +22,7 @@ function emptyValues(fields: FieldDefinition[]): Values {
 
 function toFormValue(field: FieldDefinition, raw: unknown) {
   if (field.type === 'tags') return Array.isArray(raw) ? raw.join(', ') : (raw ?? '');
+  if (field.type === 'list') return Array.isArray(raw) ? raw.join('\n') : (raw ?? '');
   if (field.type === 'boolean') return Boolean(raw);
   return raw ?? '';
 }
@@ -35,6 +36,11 @@ function toPayload(fields: FieldDefinition[], values: Values) {
         .split(',')
         .map((entry) => entry.trim())
         .filter(Boolean);
+    } else if (field.type === 'list') {
+      payload[field.name] = String(value ?? '')
+        .split(/\r?\n/)
+        .map((entry) => entry.trim())
+        .filter(Boolean);
     } else if (field.type === 'number') {
       payload[field.name] = value === '' || value === null ? null : Number(value);
     } else if (typeof value === 'string') {
@@ -46,11 +52,11 @@ function toPayload(fields: FieldDefinition[], values: Values) {
   return payload;
 }
 
-function UploadButton({ kind, collectionName, onUploaded }: { kind: 'image' | 'file'; collectionName: string; onUploaded: (url: string) => void }) {
+function UploadButton({ kind, collectionName, onUploaded }: { kind: 'image' | 'file' | 'video'; collectionName: string; onUploaded: (url: string) => void }) {
   const { api } = useSite();
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState('');
-  const accept = kind === 'image' ? 'image/jpeg,image/png,image/webp,image/gif' : 'application/pdf';
+  const accept = kind === 'image' ? 'image/jpeg,image/png,image/webp,image/gif' : kind === 'video' ? 'video/mp4' : 'application/pdf';
 
   const handleChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -59,6 +65,12 @@ function UploadButton({ kind, collectionName, onUploaded }: { kind: 'image' | 'f
     if (file.type === 'image/gif' && file.size > 3 * 1024 * 1024) {
       const ok = window.confirm(
         `This GIF is ${(file.size / 1024 / 1024).toFixed(1)} MB. Large GIFs make the website slow to open on phones - under 3 MB is best. Upload it anyway?`,
+      );
+      if (!ok) return;
+    }
+    if (kind === 'video' && file.size > 25 * 1024 * 1024) {
+      const ok = window.confirm(
+        `This video is ${(file.size / 1024 / 1024).toFixed(0)} MB. Visitors on phones download the whole file before it plays - under 25 MB is best. Upload it anyway?`,
       );
       if (!ok) return;
     }
@@ -84,11 +96,11 @@ function UploadButton({ kind, collectionName, onUploaded }: { kind: 'image' | 'f
         }`}
       >
         {isUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-        {isUploading ? 'Uploading...' : kind === 'image' ? 'Upload a photo' : 'Upload a PDF'}
+        {isUploading ? 'Uploading...' : kind === 'image' ? 'Upload a photo' : kind === 'video' ? 'Upload a video' : 'Upload a PDF'}
         <input type="file" accept={accept} onChange={handleChange} disabled={isUploading} className="sr-only" />
       </label>
       <p className="text-[11px] text-muted-foreground">
-        {kind === 'image' ? 'JPG, PNG, WEBP or GIF, up to 10 MB.' : 'PDF, up to 20 MB.'}
+        {kind === 'image' ? 'JPG, PNG, WEBP or GIF, up to 10 MB.' : kind === 'video' ? 'MP4, up to 100 MB.' : 'PDF, up to 20 MB.'}
       </p>
       {error && <p className="text-xs font-semibold text-destructive">{error}</p>}
     </div>
@@ -171,6 +183,30 @@ function FieldInput({
     );
   }
 
+  if (field.type === 'list') {
+    const text = String(value ?? '');
+    const lines = text.split(/\r?\n/).filter((line) => line.trim()).length;
+    // Long lines (paragraphs) wrap, so size the box by length as well.
+    const visualRows = text.split(/\r?\n/).reduce((rows, line) => rows + Math.max(1, Math.ceil(line.length / 90)), 0);
+    return (
+      <div>
+        <textarea
+          id={id}
+          rows={Math.min(Math.max(visualRows + 1, 4), 18)}
+          value={text}
+          onChange={(event) => onChange(event.target.value)}
+          className={inputClass}
+        />
+        <p className="mt-1 flex justify-between gap-3 text-[11px] text-muted-foreground">
+          <span>{field.help ? '' : 'One per line.'}</span>
+          <span className="tabular-nums">
+            {lines} {lines === 1 ? 'line' : 'lines'}
+          </span>
+        </p>
+      </div>
+    );
+  }
+
   if (field.type === 'select') {
     const options = field.optionsFrom ? (dynamicOptions[field.optionsFrom] ?? []) : (field.options ?? []);
     const current = String(value ?? '');
@@ -212,7 +248,7 @@ function FieldInput({
     const current = String(value ?? '');
     return (
       <div className="space-y-2">
-        <UploadButton kind="file" collectionName={collectionName} onUploaded={onChange} />
+        <UploadButton kind={field.accept === 'video' ? 'video' : 'file'} collectionName={collectionName} onUploaded={onChange} />
         {current && (
           <a
             href={media(current)}
@@ -284,7 +320,8 @@ function FieldInput({
     <input
       id={id}
       type={field.type === 'number' ? 'number' : 'text'}
-      inputMode={field.type === 'number' ? 'numeric' : undefined}
+      inputMode={field.type === 'number' ? (field.decimals ? 'decimal' : 'numeric') : undefined}
+      step={field.type === 'number' ? (field.decimals ? 10 ** -field.decimals : 1) : undefined}
       min={field.min}
       max={field.max}
       maxLength={field.maxLength}

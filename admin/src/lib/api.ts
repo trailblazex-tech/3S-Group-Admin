@@ -34,8 +34,14 @@ export interface FieldOption {
 
 export interface FieldDefinition {
   name: string;
-  type: 'text' | 'textarea' | 'number' | 'date' | 'time' | 'image' | 'file' | 'select' | 'tags' | 'boolean';
+  type: 'text' | 'textarea' | 'number' | 'date' | 'time' | 'image' | 'file' | 'select' | 'tags' | 'list' | 'boolean';
   label: string;
+  /** File fields: "video" takes an MP4 instead of a PDF. */
+  accept?: 'video';
+  /** Number fields: decimal places kept (whole numbers otherwise). */
+  decimals?: number;
+  /** List fields: the longest one line may be. */
+  maxItemLength?: number;
   required?: boolean;
   help?: string;
   maxLength?: number;
@@ -119,6 +125,12 @@ export interface FormSummary {
   emailField: string | null;
   ratingsField: string | null;
   interestField: string | null;
+  /** The "all" choice of the interest filter, e.g. "Buyers and sellers". */
+  interestAllLabel?: string | null;
+  /** Fields shown after the name in the list; null for the default set. */
+  listFields: string[] | null;
+  /** The field quoted in the list; null for the default. */
+  commentField: string | null;
   fields: FormFieldDefinition[];
   statuses: FieldOption[];
   total: number;

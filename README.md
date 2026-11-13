@@ -5,9 +5,11 @@ authenticator app), pick a website, and edit its content - photos, people,
 documents, announcements - without a developer. "Publish" rebuilds that
 website with what was saved.
 
-**Websites on the platform:** The Konark Academy (`konark`). Coming next:
-3S Minerals, 3S Global Greens, 3S Security - platform admins already see
-them on the website picker (`upcomingSites` in `api/src/sites/index.js`).
+**Websites on the platform:** The Konark Academy (`konark`), 3S Minerals
+(`minerals`), 3S Global Greens (`globalgreens`). Coming next: 3S Security -
+platform admins already see it on the website picker (`upcomingSites` in
+`api/src/sites/index.js`). Minerals and Global Greens go-live steps:
+[docs/going-live-minerals-globalgreens.md](docs/going-live-minerals-globalgreens.md).
 
 ## How it fits together
 
@@ -62,6 +64,9 @@ npm run library:upload   # upload them to the media bucket
 npm run analytics:connect -- --site konark --property <id> --key <key.json>   # GA4 reports
 npm run user:invite -- --email a@b.com --name "A B" --sites konark
 npm run site:grant  -- --email a@b.com --site other-site [--revoke]
+npm run site:connect-github -- --site globalgreens --repo owner/name --token-file token.txt
+npm run content:check -- --site minerals --from ../3S_Minerals/content   # before db:import
+npm run guide:build      # rebuild every site's guide (docs/client-guide)
 ```
 
 Guides: [onboarding a new website](docs/onboarding-a-site.md) ·

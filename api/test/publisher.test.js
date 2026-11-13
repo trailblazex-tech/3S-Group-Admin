@@ -61,3 +61,20 @@ test('webhooks parse as bare URLs or JSON requests', () => {
   assert.deepEqual(parsed.body, { event_type: 'publish' });
   assert.equal(parseWebhook(null), null);
 });
+
+test('a pre-rendered site counts as published only when its rebuild started', async () => {
+  const rebuildSite = { id: 'globalgreens', name: '3S Global Greens', publishDelay: 'rebuild' };
+  const make = (rebuild, hook = { url: 'https://api.github.com/repos/x/y/dispatches' }) =>
+    createPublisher({ snapshot: { write: async () => undefined }, resolveWebhook: async () => hook, rebuild });
+
+  const started = await make(async () => true).publish(rebuildSite, files);
+  assert.equal(started.queued, true);
+  assert.match(started.message, /being rebuilt/);
+
+  const failed = await make(async () => false).publish(rebuildSite, files);
+  assert.equal(failed.queued, false);
+  assert.match(failed.message, /could not be rebuilt/);
+
+  const noHook = await make(async () => true, null).publish(rebuildSite, files);
+  assert.equal(noHook.queued, false, 'without a rebuild hook nothing would change on the site');
+});

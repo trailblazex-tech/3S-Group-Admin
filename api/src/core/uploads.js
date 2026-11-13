@@ -18,6 +18,9 @@ export const uploadTypes = {
   // for visitors, and the admin says so before it is uploaded.
   'image/gif': { ext: 'gif', maxBytes: 10 * MB },
   'application/pdf': { ext: 'pdf', maxBytes: 20 * MB },
+  // Short website clips (e.g. a home page "watch our story" video). Visitors
+  // on phones download the whole file, so the admin suggests compressing it.
+  'video/mp4': { ext: 'mp4', maxBytes: 100 * MB },
 };
 
 /**
@@ -31,7 +34,7 @@ export function planUpload({ siteId, collections, collection, filename, contentT
   }
 
   const rule = uploadTypes[contentType];
-  if (!rule) throw new ApiError(400, 'That file type is not allowed. Use a JPG, PNG, WEBP or GIF image, or a PDF.');
+  if (!rule) throw new ApiError(400, 'That file type is not allowed. Use a JPG, PNG, WEBP or GIF image, a PDF, or an MP4 video.');
 
   const bytes = Number(size);
   if (!Number.isFinite(bytes) || bytes <= 0) throw new ApiError(400, 'That file looks empty.');

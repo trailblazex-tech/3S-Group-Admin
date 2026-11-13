@@ -5,8 +5,10 @@
 import { assertValidCollections } from '../core/schema.js';
 import { assertValidForms } from '../core/forms.js';
 import konark from './konark/site.js';
+import minerals from './minerals/site.js';
+import globalgreens from './globalgreens/site.js';
 
-const all = [konark];
+const all = [konark, minerals, globalgreens];
 
 /**
  * 3S Group websites that are not on the platform yet. Platform admins see
