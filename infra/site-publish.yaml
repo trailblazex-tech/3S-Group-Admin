@@ -4,13 +4,18 @@ Description: >-
   trailblazex-tech/3S_GlobalGreen) upload the built site to its S3 bucket and
   refresh its CloudFront distribution - nothing else. GitHub signs in with
   OIDC, so no AWS keys are stored anywhere.
-  Deploy: aws cloudformation deploy --stack-name 3s-site-publish
+  Deploy: aws cloudformation deploy --stack-name site-publish-3s
           --template-file infra/site-publish.yaml --capabilities CAPABILITY_NAMED_IAM
 
 Parameters:
   Repository:
     Type: String
     Default: trailblazex-tech/3S_GlobalGreen
+  # The organisation uses immutable OIDC subjects: owner and repository with
+  # their numeric ids (gh api repos/<repo>/actions/oidc/customization/sub).
+  ImmutableRepository:
+    Type: String
+    Default: trailblazex-tech@292789931/3S_GlobalGreen@1379185157
   SiteBucket:
     Type: String
     Default: 3sglobalgreens.com
@@ -40,11 +45,12 @@ Resources:
               Federated: !Ref GitHubOidc
             Action: sts:AssumeRoleWithWebIdentity
             Condition:
+              # Only workflow runs on the main branch of that one repository.
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
-              # Only workflow runs on the main branch of that one repository.
-              StringLike:
-                token.actions.githubusercontent.com:sub: !Sub repo:${Repository}:ref:refs/heads/main
+                token.actions.githubusercontent.com:sub:
+                  - !Sub repo:${ImmutableRepository}:ref:refs/heads/main
+                  - !Sub repo:${Repository}:ref:refs/heads/main
       Policies:
         - PolicyName: upload-and-refresh
           PolicyDocument:

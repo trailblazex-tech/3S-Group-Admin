@@ -1,42 +1,34 @@
 # Going live: 3S Minerals and 3S Global Greens
 
-## Status (13 Nov 2026)
+## Status (14 Nov 2026)
 
-Done: API and admin deployed (both sites, three guides); content imported and
-matches the sites exactly; cfo@3sgroup.co.in has both sites; first snapshots
-published; Global Greens new build live (pages identical to before, enquiries
-also reach Leads); Minerals new build uploaded to its bucket; all three form
-routes answer in production.
+Both sites are live on the platform.
 
-Left:
-
-1. **Minerals CloudFront** (distribution `EIWU9VKDSAN5S`) is in AWS account
-   794038247362, not the admin account, and caches the home page for a year.
-   Someone with access runs once:
-   `aws cloudfront create-invalidation --distribution-id EIWU9VKDSAN5S --paths "/*"`
-   Until then visitors keep seeing the old Minerals build. After it, Publish
-   reaches Minerals visitors within seconds, with no further step.
-2. **Global Greens Publish** (rebuild on Publish): deploy
-   `infra/site-publish.yaml` (GitHub OIDC role, limited to that bucket and
-   distribution), then `npm run site:connect-github` with a fine-grained
-   token. The workflow in 3S_GlobalGreen already uses that role and needs no
-   repository secrets. Until then Publish on Global Greens says the website
-   could not be rebuilt; changes stay saved.
-
-   ```bash
-   aws cloudformation deploy --stack-name 3s-site-publish --template-file infra/site-publish.yaml --capabilities CAPABILITY_NAMED_IAM
-   ```
-
-Both sites are on the platform in code (`api/src/sites/minerals`,
-`api/src/sites/globalgreens`) and fully tested locally. Nothing below has
-been run against production yet. Do the steps in order; each one is safe to
-repeat.
+- Admin: API and app deployed (both sites, three guides). Content imported
+  and identical to the sites; cfo@3sgroup.co.in has both sites; snapshots
+  published.
+- **3S Minerals**: new build live. It is the Amplify app **app4102**
+  (`d25jail5cpgb2v`, eu-north-1, branch `staging`), deployed from the S3
+  bucket `3sminerals.co.in` - redeployed with `aws amplify start-deployment
+  --source-url s3://3sminerals.co.in --source-url-type BUCKET_PREFIX`. Its
+  rewrite rules now send page addresses to index.html with status 200 (they
+  returned 404 before). Code deploys: `scripts/deploy.sh` in 3S_Minerals.
+  Publish needs no rebuild.
+- **3S Global Greens**: new build live; the publish workflow runs end to
+  end (pull, build, upload to S3, refresh CloudFront E1AKZBHB9P57O) as role
+  `3s-globalgreens-publish` (stack `site-publish-3s`, infra/site-publish.yaml;
+  the organisation uses immutable OIDC subjects, hence the numeric ids).
+- Left: connect Publish to that workflow - `npm run site:connect-github --
+  --site globalgreens --repo trailblazex-tech/3S_GlobalGreen --token-file
+  <file>` with a fine-grained token ("Contents: Read and write" on that repo).
+  Until then Publish on Global Greens says the website could not be rebuilt;
+  run the workflow from the repo's Actions tab instead.
 
 | | 3S Minerals | 3S Global Greens |
 | --- | --- | --- |
 | Site repo / branch | trailblazex-tech/3S_Minerals, `admin-content` | trailblazex-tech/3S_GlobalGreen, `admin-content` |
 | Site type | React + Vite (single page) | Next.js static export |
-| Hosting (unchanged) | S3 + CloudFront | S3 + CloudFront |
+| Hosting (unchanged) | Amplify app4102, deployed from S3 | S3 + CloudFront |
 | How Publish reaches visitors | Pages load the published snapshot at page load: **seconds**, no rebuild | The site is **rebuilt** by its GitHub workflow: ~5 minutes |
 | Leads (forms into the admin) | Contact form, Vendor Enquiry form | Buy / Sell enquiry form (still emailed as well) |
 | Career applications | Email (career Lambda), unchanged | Email (mail service), unchanged |
