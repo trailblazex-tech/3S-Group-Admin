@@ -12,6 +12,28 @@ import { createPublisher, createWebhookResolver } from './aws/publisher.js';
 import { createS3Uploader } from './aws/s3-uploader.js';
 import { createSnapshotWriter } from './aws/snapshot.js';
 import { createAnalyticsCredentials } from './aws/analytics-credentials.js';
+import { createAccessRequestNotifier, createCognitoUserAdmin } from './aws/users.js';
+import { accessRequestMessage } from './core/users.js';
+
+const notifyAccessRequest = createAccessRequestNotifier();
+
+/**
+ * Cognito calls this function too, once someone who asked for an account
+ * has verified their email: the main admin gets an email to approve them.
+ * It never fails the sign-up - a missed email is logged, and the request
+ * still waits on the Users page.
+ */
+async function onCognitoTrigger(event) {
+  if (event.triggerSource === 'PostConfirmation_ConfirmSignUp') {
+    const attributes = event.request?.userAttributes ?? {};
+    try {
+      await notifyAccessRequest(accessRequestMessage({ name: attributes.name, email: attributes.email ?? '', adminUrl: process.env.ADMIN_URL }));
+    } catch (error) {
+      console.error('[access-request] could not send the email', error);
+    }
+  }
+  return event;
+}
 
 const maxBodyBytes = 512 * 1024;
 const publisher = createPublisher({
@@ -26,6 +48,7 @@ const router = createRouter({
   mediaBaseUrl: process.env.MEDIA_BASE_URL,
   upcoming: upcomingSites,
   analyticsCredentials: createAnalyticsCredentials(),
+  userAdmin: createCognitoUserAdmin(),
 });
 
 function respond(status, body, headers = {}) {
@@ -42,6 +65,7 @@ function respond(status, body, headers = {}) {
 }
 
 export async function handler(event) {
+  if (event.triggerSource && event.userPoolId) return onCognitoTrigger(event);
   const method = event.requestContext?.http?.method ?? 'GET';
   // Browsers reach the API as /api/... on the admin's CloudFront domain.
   const path = (event.rawPath ?? '/').replace(/^\/api(?=\/|$)/, '') || '/';

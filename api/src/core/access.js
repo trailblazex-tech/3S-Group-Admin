@@ -33,6 +33,9 @@ export function userFromClaims(claims) {
     name: String(claims.name || email.split('@')[0] || 'Admin'),
     groups,
     isPlatformAdmin: groups.includes(platformAdminGroup),
+    // The user pool that issued the token (https://cognito-idp.<region>.amazonaws.com/<pool id>),
+    // which the Users page manages.
+    userPoolId: typeof claims.iss === 'string' ? claims.iss.split('/').pop() || null : null,
   };
 }
 

@@ -13,9 +13,30 @@ import { RecordForm } from './RecordPage';
 const pageSize = 40;
 
 function PageHeader({ collection, count, action }: { collection: CollectionSummary; count: number | null; action?: ReactNode }) {
+  const { site } = useSite();
+  // Sites with a page-by-page menu say which website page this section is on.
+  const page = site.menu && collection.group ? site.menu.find((entry) => entry.name === collection.group) : null;
   return (
     <div className="flex flex-wrap items-end justify-between gap-4">
       <div className="min-w-0">
+        {page && (
+          <p className="mb-1 flex flex-wrap items-center gap-x-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            <span>{page.name}</span>
+            {page.path && site.publicUrl && (
+              <>
+                <span aria-hidden>·</span>
+                <a
+                  href={`${site.publicUrl.replace(/\/$/, '')}${page.path}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="normal-case tracking-normal underline-offset-2 hover:text-foreground hover:underline"
+                >
+                  View on website
+                </a>
+              </>
+            )}
+          </p>
+        )}
         <h1 className="font-display text-3xl font-semibold text-foreground">{collection.label}</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
           {collection.description} {count === null || collection.display === 'form' ? '' : `${count} ${count === 1 ? 'record' : 'records'}.`}

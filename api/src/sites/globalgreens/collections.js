@@ -33,7 +33,7 @@ export const collections = {
   'company-profile': {
     label: 'Company Profile',
     group: 'Company',
-    description: 'Tagline, description, vision, mission and the year operations began - used across the site.',
+    description: 'Slogan, company description, vision, mission and the year operations began - used in the home page banner, About Us and the footer.',
     file: 'company',
     key: 'profile',
     titleField: 'headline',
@@ -95,7 +95,7 @@ export const collections = {
   locations: {
     label: 'Locations',
     group: 'Company',
-    description: 'The corporate office and the manufacturing unit: addresses, photos and directions.',
+    description: 'The corporate office and the manufacturing unit: addresses, photos and directions - on the Contact page, About Us and the footer.',
     file: 'company',
     key: 'locations',
     titleField: 'label',
@@ -320,7 +320,7 @@ export const collections = {
   services: {
     label: 'Services',
     group: 'Products & Services',
-    description: 'Recycling and processing services.',
+    description: 'The cards in "Our Services" on Products & Services. They are also listed on the home page.',
     file: 'products',
     key: 'services',
     titleField: 'title',

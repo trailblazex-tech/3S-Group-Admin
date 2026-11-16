@@ -13,10 +13,13 @@ import { sessionStorage as amplifySessionStorage } from 'aws-amplify/utils';
 import {
   confirmResetPassword,
   confirmSignIn,
+  confirmSignUp,
   fetchAuthSession,
+  resendSignUpCode,
   resetPassword,
   signIn,
   signOut,
+  signUp,
   type SignInOutput,
 } from 'aws-amplify/auth';
 import { config } from './config';
@@ -99,6 +102,28 @@ export const auth = {
     return confirmResetPassword({ username: email, confirmationCode: code, newPassword });
   },
 
+  /**
+   * Asks for an account. Cognito emails a code to prove the address; once
+   * verified, the account exists but can see nothing until the main admin
+   * approves it.
+   */
+  requestAccess(name: string, email: string, password: string) {
+    return signUp({ username: email, password, options: { userAttributes: { email, name } } });
+  },
+
+  confirmEmail(email: string, code: string) {
+    return confirmSignUp({ username: email, confirmationCode: code });
+  },
+
+  resendEmailCode(email: string) {
+    return resendSignUpCode({ username: email });
+  },
+
+  /** A fresh ID token, so access the main admin just gave shows without signing in again. */
+  async refresh() {
+    await fetchAuthSession({ forceRefresh: true }).catch(() => undefined);
+  },
+
   async idToken(): Promise<string | null> {
     try {
       const session = await fetchAuthSession();
@@ -122,6 +147,8 @@ const friendlyErrors: Record<string, string> = {
   LimitExceededException: 'Too many attempts. Wait a few minutes and try again.',
   TooManyRequestsException: 'Too many attempts. Wait a few minutes and try again.',
   PasswordResetRequiredException: 'You need to set a new password. Use "Forgot password?" below.',
+  UsernameExistsException: 'There is already an account with this email. Sign in instead, or use "Forgot password?".',
+  UserNotConfirmedException: 'Verify your email first: use "Request access" again with the same email to get a new code.',
   NetworkError: 'Could not reach the sign-in service. Check your connection.',
 };
 

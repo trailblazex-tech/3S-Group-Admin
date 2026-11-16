@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import { ArrowLeft, KeyRound, Loader2, LockKeyhole, ShieldCheck, Smartphone } from 'lucide-react';
+import { ArrowLeft, KeyRound, Loader2, LockKeyhole, MailCheck, ShieldCheck, Smartphone, UserPlus } from 'lucide-react';
 import { auth, authErrorMessage, type SignInStep } from '../lib/auth';
 import { BrandLockup, BrandMark } from '../components/Brand';
 
@@ -13,7 +13,9 @@ type Screen =
   | { kind: 'totpSetup'; setupUri: string; secret: string }
   | { kind: 'totp' }
   | { kind: 'forgot' }
-  | { kind: 'forgotConfirm' };
+  | { kind: 'forgotConfirm' }
+  | { kind: 'request' }
+  | { kind: 'requestConfirm'; resent?: boolean };
 
 const inputClass =
   'h-11 w-full rounded-lg border border-input bg-card px-3 text-sm outline-none transition-shadow focus:ring-2 focus:ring-ring';
@@ -57,6 +59,7 @@ function ErrorNote({ message }: { message: string }) {
 
 export function SignInPage({ onSignedIn, notice }: { onSignedIn: () => void; notice?: string }) {
   const [screen, setScreen] = useState<Screen>({ kind: 'credentials', notice });
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -131,13 +134,27 @@ export function SignInPage({ onSignedIn, notice }: { onSignedIn: () => void; not
 
   let icon = <LockKeyhole className="h-5 w-5" />;
   let title = 'Welcome back';
-  let intro = 'Sign in with the account your administrator created for you.';
+  let intro = 'Sign in to 3S Admin with your email and password.';
   let body: ReactNode;
+
+  const signInOrVerify = async () => {
+    try {
+      follow(await auth.start(email.trim(), password));
+    } catch (problem) {
+      // Asked for an account but never entered the email code: send a new one.
+      if (problem instanceof Error && problem.name === 'UserNotConfirmedException') {
+        await auth.resendEmailCode(email.trim());
+        go({ kind: 'requestConfirm', resent: true });
+        return;
+      }
+      throw problem;
+    }
+  };
 
   switch (screen.kind) {
     case 'credentials':
       body = (
-        <form className="space-y-4" onSubmit={run(async () => follow(await auth.start(email.trim(), password)))}>
+        <form className="space-y-4" onSubmit={run(signInOrVerify)}>
           {screen.notice && (
             <p className="rounded-lg bg-success/10 px-3 py-2 text-sm font-semibold text-success">{screen.notice}</p>
           )}
@@ -152,6 +169,79 @@ export function SignInPage({ onSignedIn, notice }: { onSignedIn: () => void; not
           <button type="button" onClick={() => go({ kind: 'forgot' })} className="w-full text-center text-sm font-semibold text-muted-foreground hover:text-foreground">
             Forgot password?
           </button>
+          <div className="border-t border-border pt-4 text-center text-sm text-muted-foreground">
+            New here?{' '}
+            <button type="button" onClick={() => go({ kind: 'request' })} className="font-bold text-foreground underline-offset-2 hover:underline">
+              Request access
+            </button>
+          </div>
+        </form>
+      );
+      break;
+
+    case 'request':
+      icon = <UserPlus className="h-5 w-5" />;
+      title = 'Request access';
+      intro = 'Create your account. The 3S Group admin will review it and choose which websites you can edit.';
+      body = (
+        <form
+          className="space-y-4"
+          onSubmit={run(async () => {
+            passwordsMatch();
+            await auth.requestAccess(name.trim(), email.trim(), newPassword);
+            go({ kind: 'requestConfirm' });
+          })}
+        >
+          <Field id="name" label="Your name">
+            <input id="name" type="text" autoComplete="name" required minLength={2} maxLength={80} value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
+          </Field>
+          <Field id="email" label="Work email">
+            <input id="email" type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} />
+          </Field>
+          {newPasswordFields}
+          {error && <ErrorNote message={error} />}
+          {submit('Request access', 'Sending...')}
+          {backToStart}
+        </form>
+      );
+      break;
+
+    case 'requestConfirm':
+      icon = <MailCheck className="h-5 w-5" />;
+      title = 'Check your email';
+      intro = `${screen.resent ? 'Your email is not verified yet. We sent a new code' : 'We sent a 6-digit code'} to ${email.trim()}. Enter it to verify your email.`;
+      body = (
+        <form
+          className="space-y-4"
+          onSubmit={run(async () => {
+            await auth.confirmEmail(email.trim(), code);
+            setPassword('');
+            go({
+              kind: 'credentials',
+              notice: 'Email verified. Your request has gone to the 3S Group admin. Sign in now to set up your authenticator app - you can start editing once you are approved.',
+            });
+          })}
+        >
+          <Field id="code" label="Code from the email">
+            <CodeInput value={code} onChange={setCode} />
+          </Field>
+          {error && <ErrorNote message={error} />}
+          {submit('Verify email', 'Verifying...')}
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              setError('');
+              auth
+                .resendEmailCode(email.trim())
+                .then(() => go({ kind: 'requestConfirm', resent: false }))
+                .catch((problem) => setError(authErrorMessage(problem)));
+            }}
+            className="w-full text-center text-sm font-semibold text-muted-foreground hover:text-foreground disabled:opacity-50"
+          >
+            Send a new code
+          </button>
+          {backToStart}
         </form>
       );
       break;

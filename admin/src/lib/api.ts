@@ -9,6 +9,21 @@ export interface Me {
   email: string;
   name: string;
   isPlatformAdmin: boolean;
+  /** The main admin: sees the Users page and approves access requests. */
+  canManageUsers?: boolean;
+}
+
+/** One account on the Users page. */
+export interface Account {
+  id: string;
+  email: string;
+  name: string;
+  /** pending = verified, waiting for approval; unverified = has not entered the email code yet. */
+  status: 'pending' | 'unverified' | 'active' | 'disabled';
+  sites: string[];
+  isPlatformAdmin: boolean;
+  isYou: boolean;
+  createdAt: string | null;
 }
 
 /** How the signed-in person is shown in the admin: never by name, the same for everyone. */
@@ -23,8 +38,24 @@ export interface Site {
   tagline: string;
   publicUrl: string;
   accent: string;
-  /** The site has public forms (feedback, enquiries) the admin can read. */
+  /** The admin shows the Feedback & Leads page (the site has public forms and doesn't hide it). */
   hasForms?: boolean;
+  /** The admin shows the Analytics page. */
+  hasAnalytics?: boolean;
+  /**
+   * The site's sections listed page by page, in the website's order: each
+   * section's `group` is one of these names. Absent = the plain grouped menu.
+   */
+  menu?: MenuEntry[];
+}
+
+export interface MenuEntry {
+  name: string;
+  /** One of the menu icons in AdminLayout (globe, home, info, package, leaf, award, briefcase). */
+  icon: string | null;
+  /** The website page these sections are on, e.g. "/about". */
+  path: string | null;
+  description: string;
 }
 
 export interface FieldOption {
@@ -242,6 +273,16 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 export function me() {
   return request<{ user: Me; sites: Site[]; upcoming?: Site[] }>('/me');
 }
+
+/** The Users page (main admin only). */
+export const usersApi = {
+  list: () => request<{ users: Account[]; sites: { id: string; name: string }[] }>('/users'),
+  setSites: (id: string, sites: string[]) =>
+    request<{ ok: true }>(`/users/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ sites }) }),
+  disable: (id: string) => request<{ ok: true }>(`/users/${encodeURIComponent(id)}/disable`, { method: 'POST' }),
+  enable: (id: string) => request<{ ok: true }>(`/users/${encodeURIComponent(id)}/enable`, { method: 'POST' }),
+  remove: (id: string) => request<{ ok: true }>(`/users/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+};
 
 export function siteApi(siteId: string) {
   const base = `/sites/${encodeURIComponent(siteId)}`;

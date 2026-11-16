@@ -450,6 +450,12 @@ export const collections = {
     label: 'Annual Reports',
     group: 'Investor Relations',
     description: 'One row per financial year with its report. Visitors pick a year and download the PDF. The year picker appears on the website once at least one report is published.',
+    /**
+     * Not shown in the admin (the client asked for it to be removed). The
+     * rows stay in the content, all unpublished, so the website shows no
+     * year picker. Remove this line to bring the section back.
+     */
+    hidden: true,
     file: 'investors',
     key: 'reports',
     titleField: 'year',

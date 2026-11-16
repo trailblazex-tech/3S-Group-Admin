@@ -25,14 +25,21 @@ Parameters:
     Type: String
     Default: ''
     Description: Route 53 hosted zone of AdminDomain (required with AdminDomain).
+  AccessRequestEmail:
+    Type: String
+    Default: ''
+    Description: Optional - the main admin's email, told when someone asks for an account (they confirm the subscription once). Leave empty for no email.
 
 Conditions:
   HasAlarmEmail: !Not [!Equals [!Ref AlarmEmail, '']]
+  HasAccessRequestEmail: !Not [!Equals [!Ref AccessRequestEmail, '']]
   HasAdminDomain: !Not [!Equals [!Ref AdminDomain, '']]
 
 Resources:
   # ---------------------------------------------------------------------------
-  # Identity - invite-only, authenticator-app MFA on every sign-in
+  # Identity - anyone may ask for an account from the sign-in page, but a new
+  # account belongs to no group and can see nothing until a platform admin
+  # approves it on the Users page. Authenticator-app MFA on every sign-in.
   # ---------------------------------------------------------------------------
   UserPool:
     Type: AWS::Cognito::UserPool
@@ -62,8 +69,17 @@ Resources:
           RequireNumbers: true
           RequireSymbols: true
           TemporaryPasswordValidityDays: 7
+      VerificationMessageTemplate:
+        DefaultEmailOption: CONFIRM_WITH_CODE
+        EmailSubject: Your 3S Admin verification code
+        EmailMessage: >-
+          Your 3S Admin verification code is {####}.<br><br>
+          After you verify your email, the 3S Group admin will review your request for access.
+      LambdaConfig:
+        # The admin API function also emails the main admin about each new request.
+        PostConfirmation: !GetAtt ApiFunction.Arn
       AdminCreateUserConfig:
-        AllowAdminCreateUserOnly: true
+        AllowAdminCreateUserOnly: false
         InviteMessageTemplate:
           EmailSubject: Your 3S Admin account
           EmailMessage: >-
@@ -480,12 +496,74 @@ Resources:
           MEDIA_BUCKET: !Ref MediaBucket
           MEDIA_BASE_URL: !Sub https://${MediaDistribution.DomainName}
           NODE_OPTIONS: --enable-source-maps
+          ADMIN_URL: !If [HasAdminDomain, !Sub 'https://${AdminDomain}', !Sub 'https://${AdminDistribution.DomainName}']
+          ACCESS_REQUEST_TOPIC: !If [HasAccessRequestEmail, !Ref AccessRequestTopic, '']
       Code:
         ZipFile: |
           exports.handler = async () => ({ statusCode: 503, body: '{"error":"The admin API is not deployed yet."}' });
       Tags:
         - Key: Project
           Value: 3s-admin
+
+  # The Users page (approve, change access, disable, remove). A separate
+  # policy: the user pool already depends on the function (its trigger), so
+  # naming the pool in the function's own role would make a cycle.
+  UserAdminPolicy:
+    Type: AWS::IAM::RolePolicy
+    Properties:
+      RoleName: !Ref ApiFunctionRole
+      PolicyName: manage-admin-users
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: ManageUsers
+            Effect: Allow
+            Action:
+              - cognito-idp:ListUsers
+              - cognito-idp:ListUsersInGroup
+              - cognito-idp:AdminAddUserToGroup
+              - cognito-idp:AdminRemoveUserFromGroup
+              - cognito-idp:AdminUserGlobalSignOut
+              - cognito-idp:AdminDisableUser
+              - cognito-idp:AdminEnableUser
+              - cognito-idp:AdminDeleteUser
+              - cognito-idp:CreateGroup
+            Resource: !GetAtt UserPool.Arn
+
+  AccessRequestTopic:
+    Type: AWS::SNS::Topic
+    Condition: HasAccessRequestEmail
+    Properties:
+      TopicName: 3s-admin-access-requests
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref AccessRequestEmail
+      Tags:
+        - Key: Project
+          Value: 3s-admin
+
+  AccessRequestPublishPolicy:
+    Type: AWS::IAM::RolePolicy
+    Condition: HasAccessRequestEmail
+    Properties:
+      RoleName: !Ref ApiFunctionRole
+      PolicyName: email-access-requests
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: TellMainAdmin
+            Effect: Allow
+            Action: sns:Publish
+            Resource: !Ref AccessRequestTopic
+
+  CognitoTriggerPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ApiFunction
+      Action: lambda:InvokeFunction
+      Principal: cognito-idp.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !GetAtt UserPool.Arn
 
   HttpApi:
     Type: AWS::ApiGatewayV2::Api

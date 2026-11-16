@@ -19,7 +19,10 @@ await build({
   minify: true,
   sourcemap: 'inline',
   legalComments: 'none',
-  external: ['pg-native'],
+  // The Cognito and SNS clients (user management, access-request emails) come
+  // from the AWS SDK v3 that the nodejs22.x Lambda runtime ships with; only the
+  // Lambda loads them (src/aws/users.js), never tests or local dev.
+  external: ['pg-native', '@aws-sdk/client-cognito-identity-provider', '@aws-sdk/client-sns'],
   // Some bundled CommonJS dependencies call require(); give ESM output one.
   banner: { js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);" },
 });

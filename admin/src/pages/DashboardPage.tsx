@@ -1,9 +1,17 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertCircle, ArrowUpRight, CheckCircle2, Inbox, Loader2, RefreshCw } from 'lucide-react';
-import type { ActivityEntry, FormSummary } from '../lib/api';
+import { AlertCircle, ArrowUpRight, CheckCircle2, FileText, Inbox, Loader2, RefreshCw } from 'lucide-react';
+import type { ActivityEntry, CollectionSummary, FormSummary } from '../lib/api';
 import { useSite } from '../lib/site';
 import { relativeTime } from '../lib/time';
+import { menuIcons } from '../components/AdminLayout';
+
+/** The small line under a section's count on the dashboard. */
+function tileStatus(collection: CollectionSummary) {
+  const hidden = collection.total - collection.published;
+  if (collection.fixed) return 'rows';
+  return hidden > 0 ? `${hidden} hidden` : 'published';
+}
 
 const actionWording: Record<string, string> = {
   create: 'added',
@@ -160,6 +168,64 @@ export function DashboardPage() {
         </Link>
       )}
 
+      {site.menu ? (
+        <div className="mt-8 space-y-9">
+          {site.menu.map((entry) => {
+            const sections = collections.filter((collection) => !collection.hidden && collection.group === entry.name);
+            if (sections.length === 0) return null;
+            const Icon = (entry.icon && menuIcons[entry.icon]) || FileText;
+            return (
+              <section key={entry.name} aria-labelledby={`dash-${entry.name}`}>
+                <div className="flex items-start gap-3 border-b border-border pb-3">
+                  <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent/15 text-foreground">
+                    <Icon className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <h2 id={`dash-${entry.name}`} className="font-display text-xl font-semibold text-foreground">
+                      {entry.name}
+                    </h2>
+                    {entry.description && <p className="mt-0.5 text-xs leading-5 text-muted-foreground">{entry.description}</p>}
+                  </div>
+                  {entry.path && site.publicUrl && (
+                    <a
+                      href={`${site.publicUrl.replace(/\/$/, '')}${entry.path}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-1 inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                      View page
+                      <ArrowUpRight className="h-3.5 w-3.5" />
+                    </a>
+                  )}
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+                  {sections.map((collection) => (
+                    <Link
+                      key={collection.name}
+                      to={path(`/${collection.name}`)}
+                      className="group flex min-w-0 flex-col rounded-xl border border-border bg-card p-3.5 transition-colors hover:border-accent sm:p-4"
+                    >
+                      <span className="flex items-start justify-between gap-2">
+                        <span className="line-clamp-2 min-h-[2.5rem] text-sm font-semibold leading-5 text-foreground">{collection.label}</span>
+                        <ArrowUpRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                      </span>
+                      {collection.display === 'form' ? (
+                        // A single settings form has no count worth showing.
+                        <span className="mt-2 flex h-8 items-end text-xs font-semibold text-muted-foreground">Settings</span>
+                      ) : (
+                        <span className="mt-2 flex items-baseline gap-1.5">
+                          <span className="text-2xl font-bold tabular-nums text-foreground">{collection.published}</span>
+                          <span className="truncate text-xs text-muted-foreground">{tileStatus(collection)}</span>
+                        </span>
+                      )}
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      ) : (
       <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {collections.filter((collection) => !collection.hidden).map((collection) => {
           const hidden = collection.total - collection.published;
@@ -181,6 +247,7 @@ export function DashboardPage() {
           );
         })}
       </div>
+      )}
 
       <section className="mt-8 overflow-hidden rounded-xl border border-border bg-card">
         <header className="flex items-center justify-between border-b border-border px-5 py-3">

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
-import { ArrowUpRight, Loader2, LogOut, ShieldCheck } from 'lucide-react';
+import { ArrowUpRight, Clock, Loader2, LogOut, RefreshCw, ShieldCheck, Users } from 'lucide-react';
 import { ApiError, me, roleLabel, sessionExpired, siteApi, type CollectionSummary, type Me, type Site } from './lib/api';
 import { BrandLockup, BrandMark } from './components/Brand';
 import { hasOwnLogo, siteLogo } from './lib/siteLogos';
@@ -15,6 +15,7 @@ import { RecordPage } from './pages/RecordPage';
 import { LeadsPage } from './pages/LeadsPage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
 import { GuidePage } from './pages/GuidePage';
+import { UsersPage } from './pages/UsersPage';
 
 function FullPage({ children }: { children: ReactNode }) {
   return (
@@ -104,7 +105,7 @@ function SiteTile({ site, upcoming = false }: { site: Site; upcoming?: boolean }
   );
 }
 
-function SitePicker({ sites, upcoming, onSignOut }: { sites: Site[]; upcoming: Site[]; onSignOut: () => void }) {
+function SitePicker({ sites, upcoming, onSignOut, canManageUsers }: { sites: Site[]; upcoming: Site[]; onSignOut: () => void; canManageUsers?: boolean }) {
   useEffect(() => {
     document.title = '3S Group - Website admin';
     document.documentElement.style.removeProperty('--site-accent');
@@ -120,6 +121,15 @@ function SitePicker({ sites, upcoming, onSignOut }: { sites: Site[]; upcoming: S
               <ShieldCheck className="h-4 w-4 text-gold" />
               {roleLabel()}
             </span>
+            {canManageUsers && (
+              <Link
+                to="/users"
+                className="inline-flex items-center gap-2 rounded-lg border border-white/15 px-3 py-2 text-sm font-semibold text-white/85 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                <Users className="h-4 w-4" />
+                Users
+              </Link>
+            )}
             <button
               type="button"
               onClick={onSignOut}
@@ -166,10 +176,45 @@ function LegacyRedirect() {
   return <Navigate to={`/${rest.replace(/^([^/]+)\/c\//, '$1/')}${search}`} replace />;
 }
 
-function Home({ sites, upcoming, onSignOut }: { sites: Site[]; upcoming: Site[]; onSignOut: () => void }) {
+function Home({ sites, upcoming, onSignOut, canManageUsers }: { sites: Site[]; upcoming: Site[]; onSignOut: () => void; canManageUsers?: boolean }) {
   // Someone who edits a single website goes straight to it.
-  if (sites.length === 1 && upcoming.length === 0) return <Navigate to={`/${sites[0].id}`} replace />;
-  return <SitePicker sites={sites} upcoming={upcoming} onSignOut={onSignOut} />;
+  if (sites.length === 1 && upcoming.length === 0 && !canManageUsers) return <Navigate to={`/${sites[0].id}`} replace />;
+  return <SitePicker sites={sites} upcoming={upcoming} onSignOut={onSignOut} canManageUsers={canManageUsers} />;
+}
+
+/** Signed in, but not approved yet (or every website was taken away). */
+function AwaitingApproval({ email, onCheck, onSignOut }: { email: string; onCheck: () => Promise<void>; onSignOut: () => void }) {
+  const [checking, setChecking] = useState(false);
+  const [checked, setChecked] = useState(false);
+  return (
+    <FullPage>
+      <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-gold/15 text-navy">
+        <Clock className="h-6 w-6" />
+      </span>
+      <p className="max-w-sm font-display text-2xl font-semibold text-foreground">Waiting for approval</p>
+      <p className="max-w-sm leading-6">
+        Your request is with the 3S Group admin. Once they approve <span className="font-semibold text-foreground">{email}</span> and choose your websites, you can start editing.
+      </p>
+      {checked && <p className="text-xs font-semibold text-foreground">Not approved yet. Try again a little later.</p>}
+      <div className="mt-2 flex flex-wrap justify-center gap-2">
+        <button
+          type="button"
+          disabled={checking}
+          onClick={async () => {
+            setChecking(true);
+            await onCheck();
+            setChecking(false);
+            setChecked(true);
+          }}
+          className="inline-flex items-center gap-2 rounded-lg bg-navy px-4 py-2 text-sm font-bold text-white hover:bg-navy-deep disabled:opacity-60"
+        >
+          <RefreshCw className={`h-4 w-4 ${checking ? 'animate-spin' : ''}`} />
+          Check again
+        </button>
+        <SignOutButton onSignOut={onSignOut} />
+      </div>
+    </FullPage>
+  );
 }
 
 function SiteWorkspace({ user, sites, upcoming, onSignOut }: { user: Me; sites: Site[]; upcoming: Site[]; onSignOut: () => void }) {
@@ -234,8 +279,8 @@ function SiteWorkspace({ user, sites, upcoming, onSignOut }: { user: Me; sites: 
           <Route path=":name" element={<CollectionPage />} />
           <Route path=":name/:id" element={<RecordPage />} />
           <Route path="activity" element={<ActivityPage />} />
-          <Route path="leads" element={<LeadsPage />} />
-          <Route path="analytics" element={<AnalyticsPage />} />
+          <Route path="leads" element={site.hasForms ? <LeadsPage /> : <Navigate to={`/${site.id}`} replace />} />
+          <Route path="analytics" element={site.hasAnalytics !== false ? <AnalyticsPage /> : <Navigate to={`/${site.id}`} replace />} />
           <Route path="guide" element={<GuidePage />} />
           <Route path="*" element={<p className="text-sm text-muted-foreground">Page not found.</p>} />
         </Routes>
@@ -322,20 +367,30 @@ export default function App() {
     );
   }
 
-  if (session.sites.length === 0) {
+  if (session.sites.length === 0 && !session.user.canManageUsers) {
     return (
-      <FullPage>
-        <p className="max-w-sm text-base font-semibold text-foreground">Your account is not linked to any website yet.</p>
-        <p className="max-w-sm">Ask a platform administrator to give {session.user.email} access, then sign in again.</p>
-        <SignOutButton onSignOut={signOut} />
-      </FullPage>
+      <AwaitingApproval
+        email={session.user.email}
+        onSignOut={signOut}
+        onCheck={async () => {
+          // Approval changes the groups in the ID token: fetch a fresh one.
+          await auth.refresh();
+          const result = await me().catch(() => null);
+          if (result && result.sites.length > 0) {
+            setSession({ state: 'ready', user: result.user, sites: result.sites, upcoming: result.upcoming ?? [] });
+          }
+        }}
+      />
     );
   }
+
+  const canManageUsers = Boolean(session.user.canManageUsers);
 
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Home sites={session.sites} upcoming={session.upcoming} onSignOut={signOut} />} />
+        <Route path="/" element={<Home sites={session.sites} upcoming={session.upcoming} onSignOut={signOut} canManageUsers={canManageUsers} />} />
+        <Route path="/users" element={canManageUsers ? <UsersPage /> : <Navigate to="/" replace />} />
         <Route path="/s/*" element={<LegacyRedirect />} />
         <Route path="/:siteId/*" element={<SiteWorkspace user={session.user} sites={session.sites} upcoming={session.upcoming} onSignOut={signOut} />} />
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -15,6 +15,7 @@
  *   PUT|DELETE /sites/<site>/forms/<form>/<id>   follow-up status / delete
  *   GET  /sites/<site>/analytics      Google Analytics summary (?start=&end= YYYY-MM-DD, or ?days=1|7|28|90; &refresh=1 skips the cache)
  *   *    /sites/<site>/...            that site's content (see engine.js)
+ *   *    /users[/...]                 accounts and access requests - platform admins only (see users.js)
  *
  * `user` is already authenticated by the caller (API Gateway's JWT
  * authorizer, or local token verification); this layer does authorization.
@@ -26,11 +27,12 @@ import { greetingLibrary } from './greeting-library.js';
 import { acceptSubmission, describeForms, formCorsHeaders, submissionStatuses } from './forms.js';
 import { analyticsReport } from './analytics.js';
 import { planUpload } from './uploads.js';
+import { handleUsers } from './users.js';
 import { describeSite, describeUpcoming } from '../sites/index.js';
 
 const json = (status, body, headers = {}) => ({ status, body, headers });
 
-export function createRouter({ sites, storeFor, uploader, mediaBaseUrl = '', upcoming = [], analyticsCredentials = async () => null }) {
+export function createRouter({ sites, storeFor, uploader, mediaBaseUrl = '', upcoming = [], analyticsCredentials = async () => null, userAdmin = null }) {
   function siteOr404(siteId) {
     const site = sites.get(siteId);
     if (!site) throw new ApiError(404, 'That site is not managed here.');
@@ -111,12 +113,16 @@ export function createRouter({ sites, storeFor, uploader, mediaBaseUrl = '', upc
     if (first === 'me' && !siteId && method === 'GET') {
       const mySites = accessibleSites(user, sites).map(describeSite);
       return json(200, {
-        user: { email: user.email, name: user.name, isPlatformAdmin: user.isPlatformAdmin },
+        user: { email: user.email, name: user.name, isPlatformAdmin: user.isPlatformAdmin, canManageUsers: user.isPlatformAdmin && Boolean(userAdmin) },
         sites: mySites,
         // Group websites not on the platform yet - only platform admins see
         // them, as "coming soon" on the website picker.
         upcoming: user.isPlatformAdmin ? upcoming.filter((entry) => !sites.has(entry.id)).map(describeUpcoming) : [],
       });
+    }
+
+    if (first === 'users') {
+      return json(200, await handleUsers({ method, rest: segments.slice(1), body, user, sites, userAdmin }), { 'Cache-Control': 'private, no-store' });
     }
 
     if (first === 'sites' && siteId) {

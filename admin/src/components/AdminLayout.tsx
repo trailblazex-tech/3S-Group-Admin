@@ -4,13 +4,20 @@ import { Link, NavLink, useLocation } from 'react-router-dom';
 import {
   BarChart3,
   Activity,
+  Award,
   BookOpen,
   BriefcaseBusiness,
   Check,
+  ChevronDown,
   ChevronsUpDown,
   ExternalLink,
   FileText,
+  Globe,
+  House,
   Inbox,
+  Info,
+  Leaf,
+  Package,
   LineChart,
   Images,
   LayoutDashboard,
@@ -62,6 +69,92 @@ const groupIcons: Record<string, typeof Users> = {
   'Fee Structure': ReceiptText,
   Career: BriefcaseBusiness,
 };
+
+/** Icons a site's page-by-page menu can use (Site.menu[].icon). */
+export const menuIcons: Record<string, typeof Users> = {
+  globe: Globe,
+  home: House,
+  info: Info,
+  package: Package,
+  leaf: Leaf,
+  award: Award,
+  briefcase: BriefcaseBusiness,
+};
+
+/** The collection a site path like /globalgreens/leadership/ashu points at. */
+function collectionFromPath(pathname: string, siteId: string) {
+  const [first, second] = pathname.split('/').filter(Boolean);
+  return first === siteId ? (second ?? null) : null;
+}
+
+/**
+ * The page-by-page menu: one fold-out entry per website page, its sections
+ * inside in the page's order. The entry holding the open section unfolds
+ * by itself; others open and close with a click and stay as left.
+ */
+function PageMenu({ linkClass }: { linkClass: (state: { isActive: boolean }) => string }) {
+  const { site, collections, path } = useSite();
+  const location = useLocation();
+  const current = collectionFromPath(location.pathname, site.id);
+  const activeGroup = collections.find((collection) => collection.name === current)?.group ?? null;
+  const [open, setOpen] = useState<Set<string>>(() => new Set(activeGroup ? [activeGroup] : []));
+
+  // Arriving at a section (from the dashboard, a link, the back button)
+  // unfolds its entry; nothing else is folded away.
+  useEffect(() => {
+    if (activeGroup) setOpen((previous) => (previous.has(activeGroup) ? previous : new Set(previous).add(activeGroup)));
+  }, [activeGroup]);
+
+  const toggle = (name: string) =>
+    setOpen((previous) => {
+      const next = new Set(previous);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+
+  return (
+    <div className="mt-4 space-y-0.5">
+      <p className="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-white/40">Website pages</p>
+      {(site.menu ?? []).map((entry) => {
+        const sections = collections.filter((collection) => !collection.hidden && collection.group === entry.name);
+        if (sections.length === 0) return null;
+        const Icon = (entry.icon && menuIcons[entry.icon]) || FileText;
+        const isOpen = open.has(entry.name);
+        const isActive = entry.name === activeGroup;
+        const panelId = `menu-${entry.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+        return (
+          <div key={entry.name}>
+            <button
+              type="button"
+              onClick={() => toggle(entry.name)}
+              aria-expanded={isOpen}
+              aria-controls={panelId}
+              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold transition-colors ${
+                isActive ? 'bg-white/[0.06] text-white' : 'text-white/75 hover:bg-white/[0.08] hover:text-white'
+              }`}
+            >
+              <Icon className="h-4 w-4 shrink-0" />
+              <span className="min-w-0 flex-1 truncate">{entry.name}</span>
+              <span className="text-[11px] font-semibold tabular-nums text-white/35">{sections.length}</span>
+              <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-white/45 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {isOpen && (
+              <div id={panelId} className="mb-1.5 ml-[1.15rem] mt-0.5 space-y-0.5 border-l border-white/10 pl-2.5">
+                {sections.map((collection) => (
+                  <NavLink key={collection.name} to={path(`/${collection.name}`)} className={linkClass}>
+                    <span className="min-w-0 flex-1 truncate">{collection.label}</span>
+                    <span className="text-xs font-semibold tabular-nums text-white/40">{collection.total}</span>
+                  </NavLink>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function SiteSwitcher({ sites, upcoming, current }: { sites: Site[]; upcoming: Site[]; current: Site }) {
   const [open, setOpen] = useState(false);
@@ -159,7 +252,7 @@ interface AdminLayoutProps {
   children: ReactNode;
 }
 
-export function AdminLayout({ sites, upcoming, onSignOut, children }: AdminLayoutProps) {
+export function AdminLayout({ user, sites, upcoming, onSignOut, children }: AdminLayoutProps) {
   const { site, api, collections, path } = useSite();
   const [isNavOpen, setIsNavOpen] = useState(false);
   const [unreadLeads, setUnreadLeads] = useState(0);
@@ -260,11 +353,17 @@ export function AdminLayout({ sites, upcoming, onSignOut, children }: AdminLayou
               )}
             </NavLink>
           )}
-          <NavLink to={path('/analytics')} className={linkClass}>
-            <LineChart className="h-4 w-4 shrink-0" />
-            Analytics
-          </NavLink>
+          {site.hasAnalytics !== false && (
+            <NavLink to={path('/analytics')} className={linkClass}>
+              <LineChart className="h-4 w-4 shrink-0" />
+              Analytics
+            </NavLink>
+          )}
 
+          {site.menu ? (
+            <PageMenu linkClass={linkClass} />
+          ) : (
+            <>
           {ungrouped.length > 0 && (
             <p className="px-3 pb-1 pt-5 text-[10px] font-bold uppercase tracking-[0.14em] text-white/40">Content</p>
           )}
@@ -303,6 +402,8 @@ export function AdminLayout({ sites, upcoming, onSignOut, children }: AdminLayou
               </div>
             );
           })}
+            </>
+          )}
 
           <p className="px-3 pb-1 pt-5 text-[10px] font-bold uppercase tracking-[0.14em] text-white/40">Website</p>
           <NavLink to={path('/activity')} className={linkClass}>
@@ -313,6 +414,12 @@ export function AdminLayout({ sites, upcoming, onSignOut, children }: AdminLayou
             <BookOpen className="h-4 w-4 shrink-0" />
             Guide
           </NavLink>
+          {user.canManageUsers && (
+            <Link to="/users" className={linkClass({ isActive: false })}>
+              <Users className="h-4 w-4 shrink-0" />
+              Users
+            </Link>
+          )}
           <a href={site.publicUrl} target="_blank" rel="noopener noreferrer" className={linkClass({ isActive: false })}>
             <ExternalLink className="h-4 w-4 shrink-0" />
             View live website

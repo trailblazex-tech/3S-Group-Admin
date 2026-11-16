@@ -13,6 +13,11 @@ export default {
   publicUrl: 'https://3sminerals.co.in',
   /** Brand colour for the admin (HSL components, no hsl() wrapper). */
   accent: '222 38% 45%',
+  /**
+   * Admin pages this site does not show. The forms still work: the website
+   * posts them and they are stored, there is just no Leads page for them.
+   */
+  hiddenPages: ['leads', 'analytics'],
   collections,
   forms,
   /** Pages allowed to post the public forms (the website, and local dev). */

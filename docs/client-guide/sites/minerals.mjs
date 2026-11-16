@@ -10,7 +10,7 @@ export default {
   domain: '3sminerals.co.in',
   description: 'How to use 3S Admin to update 3sminerals.co.in.',
   intro:
-    '3S Admin lets the 3S Minerals team update 3sminerals.co.in without a developer: contact details, photos, products, the plant process, ESG, annual reports, career openings and more - and read the enquiries the website receives. This guide walks through every screen with pictures.',
+    '3S Admin lets the 3S Minerals team update 3sminerals.co.in without a developer: contact details, photos, products, the plant process, ESG, investor details, career openings and more. This guide walks through every screen with pictures.',
   goesLive: 'About 10 seconds after Publish',
   liveStep: 'Refresh 3sminerals.co.in after about 10 seconds.',
   distFile: 'minerals.html',
@@ -30,7 +30,6 @@ export default {
       height: 900,
       marks: [
         { text: 'Publish to website' },
-        { css: `${main} a[href="/minerals/leads"]` },
         { css: `${main} a[href="/minerals/contact-details"]` },
         { css: `${sidebar} a[title="All websites"]` },
       ],
@@ -43,11 +42,9 @@ export default {
       element: { css: sidebar },
       marks: [
         { css: `${sidebar} a[href="/minerals"]` },
-        { css: `${sidebar} a[href="/minerals/leads"]` },
-        { css: `${sidebar} a[href="/minerals/analytics"]` },
         { css: `${sidebar} a[href="/minerals/contact-details"]` },
         { css: `${sidebar} a[href="/minerals/home-banner"]` },
-        { css: `${sidebar} a[href="/minerals/annual-reports"]` },
+        { css: `${sidebar} a[href="/minerals/investor-text"]` },
         { css: `${sidebar} a[href="/minerals/activity"]` },
         { css: `${sidebar} a[href="/minerals/guide"]` },
       ],
@@ -91,37 +88,10 @@ export default {
       marks: [{ label: 'Paragraphs' }, { label: 'Key points (with ticks)' }],
     },
     {
-      id: 'report',
-      path: '/minerals/annual-reports/fy-2025-2026',
-      height: 640,
-      marks: [{ label: 'Financial year' }, { text: 'Upload a PDF' }, { text: 'Published' }, { text: 'Save' }],
-    },
-    {
       id: 'openings',
       path: '/minerals/career-openings',
       height: 700,
       marks: [{ text: 'Add' }, { aria: 'Hide Plant Operators' }],
-    },
-    {
-      id: 'leads',
-      path: '/minerals/leads',
-      height: 760,
-      marks: [{ text: 'Contact Enquiries' }, { text: 'Vendor Enquiries' }, { text: 'Export to Excel' }, { aria: 'Search submissions' }, { css: 'main ul li button' }],
-    },
-    {
-      id: 'lead-detail',
-      path: '/minerals/leads',
-      height: 860,
-      prepare: async (page) => {
-        await page.click('main ul li:nth-child(2) button');
-      },
-      marks: [{ css: '[role="dialog"] a[href^="tel:"]' }, { css: '[role="dialog"] a[href^="mailto:"]' }, { text: 'Following up' }, { text: 'Save note' }],
-    },
-    {
-      id: 'analytics',
-      path: '/minerals/analytics',
-      height: 520,
-      marks: [],
     },
   ],
 
@@ -153,11 +123,10 @@ export default {
         id: 'dashboard',
         group: 'Getting started',
         title: 'The dashboard and the Publish button',
-        lead: 'The dashboard is the home of the website: everything you can edit, new enquiries, and recent changes.',
+        lead: 'The dashboard is the home of the website: everything you can edit and recent changes.',
         body: () =>
           figure('dashboard', [
             '<b>Publish to website</b> - sends everything you have saved to 3sminerals.co.in. Visitors see it within about 10 seconds.',
-            'New contact and vendor enquiries from the website, with the count of new ones.',
             'Each tile is a section you can edit. Click one to open it. The number is how many items it holds.',
             'Switch to another 3S Group website.',
           ], { caption: 'Dashboard of 3S Minerals' }) +
@@ -173,11 +142,9 @@ export default {
             'sidebar',
             [
               '<b>Dashboard</b> - the overview and the Publish button.',
-              '<b>Feedback &amp; Leads</b> - enquiries sent from the website. The orange badge counts new ones.',
-              '<b>Analytics</b> - website visitor numbers (switched on by the 3S Group team).',
               '<b>Contact Details</b> - phone, emails, addresses and map pins used across the site.',
               '<b>Home Page</b> - the big banner at the top: headline, photos, numbers and video.',
-              '<b>Investor Relations</b> - annual reports, corporate details and compliance text.',
+              '<b>Investor Relations</b> - corporate details and compliance text.',
               '<b>Activity log</b> - every change made in the admin, newest first.',
               '<b>Guide</b> - this guide, inside the admin.',
             ],
@@ -193,7 +160,7 @@ export default {
               <tr><td>Why Choose Us, Industries We Serve</td><td>"The 3S Advantage"</td></tr>
               <tr><td>Products Introduction, Products, Product Applications, Plant Capacity</td><td>"Products &amp; Services"</td></tr>
               <tr><td>ESG Commitment, Environmental Practices</td><td>"Our ESG Commitment"</td></tr>
-              <tr><td>Investor Relations Text, Annual Reports, Corporate Details</td><td>"Investor Relations"</td></tr>
+              <tr><td>Investor Relations Text, Corporate Details</td><td>"Investor Relations"</td></tr>
               <tr><td>Career Openings, Why Work With Us</td><td>"Build Your Career With Us" and the application form</td></tr>
               <tr><td>Vendor Empanelment, Vendor Requirements, Supply Types</td><td>"Vendor Empanelment" and the Vendor Enquiry page</td></tr>
             </tbody>
@@ -278,58 +245,17 @@ export default {
           ]),
       },
       {
-        id: 'investors',
-        group: 'Everyday tasks',
-        title: 'Annual reports',
-        lead: 'One row per financial year, each with its report as a PDF. Visitors pick a year in Investor Relations and download the report. The year picker appears on the website once at least one report is published.',
-        body: () =>
-          figure('report', [
-            '<b>Financial year</b>, e.g. 2025-2026.',
-            '<b>Upload a PDF</b> of the report (up to 20 MB).',
-            'Tick <b>Published</b> to show this year on the website.',
-            '<b>Save</b>, then Publish.',
-          ], { caption: 'One annual report' }) +
-          tip('The years already listed', 'The four years that came from the old website all pointed at the same sample PDF, so they start hidden. Upload each real report and tick Published.', 'warn'),
-      },
-      {
         id: 'careers',
         group: 'Everyday tasks',
         title: 'Career openings',
         lead: 'The openings listed in "Current Opportunities". The same list is offered in the "Position Applied For" choice on the application form.',
         body: () =>
           figure('openings', ['<b>Add</b> an opening.', '<b>Hide</b> one that is filled - bring it back any time.'], { caption: 'Career Openings' }) +
-          tip('Applications', 'Career applications (with the resume) are emailed to the HR team as before; they do not appear under Leads.', 'info'),
-      },
-      {
-        id: 'leads',
-        group: 'Enquiries and reports',
-        title: 'Feedback & Leads',
-        lead: 'Everything visitors send from the website\'s Contact form ("Send us a Message") and the Vendor Enquiry page.',
-        body: () =>
-          figure('leads', [
-            '<b>Contact Enquiries</b> - from the Contact section.',
-            '<b>Vendor Enquiries</b> - from vendors and suppliers.',
-            '<b>Export to Excel</b> downloads the list as a spreadsheet.',
-            'Search, and filter by status or date.',
-            'Click an entry to open it.',
-          ], { caption: 'Feedback & Leads', sample: true }) +
-          figure('lead-detail', [
-            '<b>Call</b> the person straight from here (or message them on <b>WhatsApp</b>, next to it).',
-            '<b>Email</b> them.',
-            'Mark the follow-up: <b>New</b>, <b>Following up</b> or <b>Done</b>.',
-            'Write a note for the team, then <b>Save note</b>.',
-          ], { caption: 'One enquiry, opened', sample: true }),
-      },
-      {
-        id: 'analytics',
-        group: 'Enquiries and reports',
-        title: 'Analytics',
-        lead: 'Visitor numbers from Google Analytics. For 3S Minerals this is not switched on yet - the 3S Group team connects it, and the numbers then appear here.',
-        body: () => figure('analytics', [], { caption: 'Analytics, before it is switched on' }),
+          tip('Applications', 'Career applications (with the resume) are emailed to the HR team as before.', 'info'),
       },
       {
         id: 'activity',
-        group: 'Enquiries and reports',
+        group: 'History',
         title: 'Activity log',
         lead: 'A record of every change made in the admin - what was changed, in which section, and when. It cannot be edited, so it is a reliable history. Open it from the menu.',
         body: () => '',

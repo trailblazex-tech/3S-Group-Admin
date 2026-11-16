@@ -12,7 +12,7 @@
 import http from 'node:http';
 import path from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const [repoArg, dataArg, ...siteArgs] = process.argv.slice(2);
 // Absolute, because the admin dev server later changes the working directory.
@@ -26,7 +26,15 @@ const { createLocalUploader } = await imp('api/src/local/local-uploader.js');
 const { buildDeliveryFiles } = await imp('api/src/core/delivery.js');
 const { snapshotScript } = await imp('api/src/aws/snapshot.js');
 
-const roots = Object.fromEntries(siteArgs.map((arg) => [arg.slice(0, arg.indexOf('=')), path.resolve(arg.slice(arg.indexOf('=') + 1))]));
+// site=<content root>[,<local site URL>] - with a URL, photos preview from the
+// locally running site and it may post its forms here.
+const roots = {};
+const localUrls = {};
+for (const arg of siteArgs) {
+  const [root, url] = arg.slice(arg.indexOf('=') + 1).split(',');
+  roots[arg.slice(0, arg.indexOf('='))] = path.resolve(root);
+  if (url) localUrls[arg.slice(0, arg.indexOf('='))] = url;
+}
 const port = 8787;
 const apiOrigin = `http://localhost:${port}`;
 const user = {
@@ -51,7 +59,23 @@ const storeFor = (site) => {
   return store;
 };
 const servedSites = new Map([...sites].filter(([id]) => roots[id]));
-const router = createRouter({ sites: servedSites, storeFor, uploader, upcoming: upcomingSites });
+for (const [id, url] of Object.entries(localUrls)) {
+  const site = servedSites.get(id);
+  if (!site) continue;
+  site.publicUrl = url;
+  site.formOrigins = [...new Set([...(site.formOrigins ?? []), new URL(url).origin])];
+}
+// Example accounts for the Users page (in memory; nothing reaches Cognito).
+const { createMemoryUserAdmin } = await imp('api/src/local/memory-users.js');
+const day = (n) => new Date(Date.now() - n * 86400000).toISOString();
+const userAdmin = createMemoryUserAdmin([
+  { username: 'harness', email: user.email, name: user.name, groups: ['platform-admins'], createdAt: day(60) },
+  { username: 'u-request', email: 'priya.sharma@3sgroup.co.in', name: 'Priya Sharma', groups: [], createdAt: day(0) },
+  { username: 'u-unverified', email: 'new.person@example.com', name: 'New Person', status: 'UNCONFIRMED', groups: [], createdAt: day(1) },
+  { username: 'u-editor', email: 'rahul.verma@3sgroup.co.in', name: 'Rahul Verma', groups: ['site-globalgreens'], createdAt: day(20) },
+  { username: 'u-off', email: 'old.staff@3sgroup.co.in', name: 'Old Staff', enabled: false, groups: ['site-minerals'], createdAt: day(40) },
+]);
+const router = createRouter({ sites: servedSites, storeFor, uploader, upcoming: upcomingSites, userAdmin });
 
 const send = (res, status, body, headers = {}) => {
   res.writeHead(status, {
@@ -109,7 +133,7 @@ http
 
 // The admin app, with the sign-in module swapped for the stub.
 const { createServer } = await import(pathToFileURL(path.join(adminRepo, 'node_modules/vite/dist/node/index.js')).href);
-const fakeAuth = path.join(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1')), 'fake-auth.ts');
+const fakeAuth = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fake-auth.ts');
 process.env.VITE_API_URL = apiOrigin;
 process.env.VITE_COGNITO_USER_POOL_ID = 'harness';
 process.env.VITE_COGNITO_CLIENT_ID = 'harness';

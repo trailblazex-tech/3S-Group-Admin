@@ -21,6 +21,10 @@ export const auth = {
   },
   async requestPasswordReset() {},
   async confirmPasswordReset() {},
+  async requestAccess() {},
+  async confirmEmail() {},
+  async resendEmailCode() {},
+  async refresh() {},
   async idToken(): Promise<string | null> {
     return signedIn() ? 'harness-token' : null;
   },
