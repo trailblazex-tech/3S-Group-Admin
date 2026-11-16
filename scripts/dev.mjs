@@ -37,7 +37,11 @@ const siteDir = (site) => path.resolve(process.env[envKey(site.id)] || path.join
 // Relative media paths preview against the locally running website.
 for (const site of sites.values()) {
   const localUrl = process.env[`${envKey(site.id)}_URL`];
-  if (localUrl) site.publicUrl = localUrl;
+  if (localUrl) {
+    site.publicUrl = localUrl;
+    // The locally running site may post its forms here, whatever its port.
+    site.formOrigins = [...new Set([...(site.formOrigins ?? []), new URL(localUrl).origin])];
+  }
   console.log(`  ${site.id.padEnd(12)} ${path.join(siteDir(site), 'content')}${localUrl ? `  (preview ${localUrl})` : ''}`);
 }
 

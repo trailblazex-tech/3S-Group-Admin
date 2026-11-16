@@ -8,6 +8,7 @@
   ],
   "scripts": {
     "dev": "node scripts/dev.mjs",
+    "dev:demo": "node scripts/dev-demo.mjs",
     "test": "npm test --workspace api",
     "typecheck": "npm run typecheck --workspace admin",
     "lint": "npm run lint --workspace admin",
